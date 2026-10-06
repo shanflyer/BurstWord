@@ -3,6 +3,9 @@
     <type fullname="UnityEngine.TextCore.LowLevel.FontEngine">
       <method name="TryAddGlyphToTexture" />
       <method name="ResetAtlasTexture" />
+      <method name="LoadFontFace" />
+      <method name="TryGetGlyphWithIndexValue" />
+      <method name="UnloadFontFace" />
     </type>
   </assembly>
 </linker>

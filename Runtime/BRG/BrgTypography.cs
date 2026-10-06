@@ -807,32 +807,30 @@ namespace BurstWord.BRG
         {
             public readonly IntPtr NativeFont;
             private readonly TMP_FontAsset font;
-            private readonly byte[] bytes;
             private readonly Dictionary<uint, ResolvedGlyph> glyphs = new Dictionary<uint, ResolvedGlyph>();
             private readonly Dictionary<uint, uint> nominalGlyphs = new Dictionary<uint, uint>();
             private readonly Dictionary<uint, Texture2D> glyphTextures = new Dictionary<uint, Texture2D>();
             private readonly List<Texture2D> textures = new List<Texture2D>();
             private List<GlyphRect> free, used;
             public readonly ITextShapingFont Session;
+            private readonly FontEngineAtlasBridge.Face atlasFace;
             public ShapingFace(TMP_FontAsset asset, byte[] data, ITextShapingFont session)
             {
-                font = asset; bytes = data; Session = session;
+                font = asset; Session = session; atlasFace = new FontEngineAtlasBridge.Face(asset, data);
                 NativeFont = new IntPtr(BrgObjectIdentity.Of(asset)); // Cache identity only; never a native ABI handle.
                 foreach (var glyph in font.glyphTable) glyphs[glyph.index] = new ResolvedGlyph { font = font, character = new TMP_Character(0, font, glyph) };
             }
             public bool Resolve(uint index, out ResolvedGlyph resolved)
             {
                 if (glyphs.TryGetValue(index, out resolved)) return true;
-                if (bytes != null ? FontEngine.LoadFontFace(bytes, (int)font.faceInfo.pointSize) != FontEngineError.Success :
-                    font.sourceFontFile == null || FontEngine.LoadFontFace(font.sourceFontFile, (int)font.faceInfo.pointSize) != FontEngineError.Success) return false;
-                if (!FontEngine.TryGetGlyphWithIndexValue(index, GlyphLoadFlags.LOAD_NO_BITMAP, out var glyph)) return false;
+                if (!atlasFace.TryGetGlyph(index, out var glyph)) return false;
                 if (glyph.metrics.width > 0 && glyph.metrics.height > 0)
                 {
                     if (textures.Count == 0) NewAtlas();
-                    if (!FontEngineAtlasBridge.Add(index, font.atlasPadding, GlyphPackingMode.BestShortSideFit, free, used, font.atlasRenderMode, textures[textures.Count - 1], out glyph))
+                    if (!atlasFace.Add(index, font.atlasPadding, GlyphPackingMode.BestShortSideFit, free, used, font.atlasRenderMode, textures[textures.Count - 1], out glyph))
                     {
                         NewAtlas();
-                        if (!FontEngineAtlasBridge.Add(index, font.atlasPadding, GlyphPackingMode.BestShortSideFit, free, used, font.atlasRenderMode, textures[textures.Count - 1], out glyph)) return false;
+                        if (!atlasFace.Add(index, font.atlasPadding, GlyphPackingMode.BestShortSideFit, free, used, font.atlasRenderMode, textures[textures.Count - 1], out glyph)) return false;
                     }
                     textures[textures.Count - 1].Apply(false, false);
                     glyphTextures[index] = textures[textures.Count - 1];
@@ -858,7 +856,7 @@ namespace BurstWord.BRG
                 free = new List<GlyphRect> { new GlyphRect(0, 0, width - 1, height - 1) }; used = new List<GlyphRect>();
             }
             public Texture Texture(Glyph glyph) => glyphTextures.TryGetValue(glyph.index, out var texture) ? texture : font.atlasTextures[glyph.atlasIndex];
-            public void Dispose() { Session.Dispose(); foreach (var texture in textures) DestroyGeneratedObject(texture); }
+            public void Dispose() { Session.Dispose(); atlasFace.Dispose(); foreach (var texture in textures) DestroyGeneratedObject(texture); }
         }
 
         private void ValidateTmpMeasuredBoundaries()
