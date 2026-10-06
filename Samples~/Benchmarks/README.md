@@ -23,4 +23,4 @@
 
 多语言、换行、字体材质、Job 优化、三种排序/空间模式与 GPU 动画均保留。临时验证脚本、旧场景、逐帧记录器、详细诊断导出和重复菜单已移除；正常运行不会自动写测试日志或性能报告。必要的错误和缺资源提示仍会保留。
 
-详细说明见 [BRG.md](BRG.md)、[TEXT_FEATURES.md](TEXT_FEATURES.md)、[SPATIAL_RENDERING.md](SPATIAL_RENDERING.md) 与 [GPUAnimation.md](GPUAnimation.md)。
+详细说明见 [BRG.md](https://github.com/shanflyer/BurstWord/blob/main/Documentation~/BRG.md)、[TEXT_FEATURES.md](https://github.com/shanflyer/BurstWord/blob/main/Documentation~/TEXT_FEATURES.md)、[SPATIAL_RENDERING.md](https://github.com/shanflyer/BurstWord/blob/main/Documentation~/SPATIAL_RENDERING.md) 与 [GPUAnimation.md](https://github.com/shanflyer/BurstWord/blob/main/Documentation~/GPUAnimation.md)。
