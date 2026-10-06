@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bd1db116387a67647913acb0597ce702, type: 3}
+  m_Name: BurstWordFontSources
+  m_EditorClassIdentifier: 
+  fonts:
+  - font: {fileID: 11400000, guid: c253666b126f71d449d19ffd32c14f34, type: 2}
+    openTypeData: {fileID: 4900000, guid: 90f2f5e262d8ae140b0a501c3db0046c, type: 3}
+  - font: {fileID: 11400000, guid: f25b8658edd8fd64a823626cc72bf2cb, type: 2}
+    openTypeData: {fileID: 4900000, guid: d673867cc891ee842918c65b09fb0526, type: 3}
+  - font: {fileID: 11400000, guid: 9f5ed8abcaabfba4ebfef059defebc46, type: 2}
+    openTypeData: {fileID: 4900000, guid: 3fd7174da3723a14e94ee042b92aacb1, type: 3}
+  - font: {fileID: 11400000, guid: 044341a90284efd4daaaece55a1d7457, type: 2}
+    openTypeData: {fileID: 4900000, guid: 953bb1a8afbc8b2418cbdd037a67f560, type: 3}
+  - font: {fileID: 11400000, guid: 04c9a6db25a225846b815e256678eb55, type: 2}
+    openTypeData: {fileID: 4900000, guid: bfed87c4414c00c4abf5a73fbf17fea5, type: 3}
+  - font: {fileID: 11400000, guid: 5fe409e00d4c4a8488e024c527477096, type: 2}
+    openTypeData: {fileID: 4900000, guid: f824399058d3ab54f9fce1215c8d4d7d, type: 3}
+  - font: {fileID: 11400000, guid: 2e498d1c8094910479dc3e1b768306a4, type: 2}
+    openTypeData: {fileID: 4900000, guid: 084875739fceae14ebf3e50fecd4f887, type: 3}
+  - font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+    openTypeData: {fileID: 4900000, guid: 7d143359f2ed846419b3bb58b121bb75, type: 3}

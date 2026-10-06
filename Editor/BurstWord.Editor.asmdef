@@ -1,0 +1,12 @@
+{
+  "name": "BurstWord.Editor",
+  "references": [
+    "BurstWord.Runtime",
+    "Unity.TextMeshPro",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

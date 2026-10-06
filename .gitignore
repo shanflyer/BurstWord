@@ -1,0 +1,23 @@
+# Only package sources and supplied samples belong in this repository.
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Ll]ogs/
+UserSettings/
+ProjectSettings/
+Build/
+Builds/
+BenchmarkReports/
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.sln
+*.suo
+*.user
+*.log
+*.tmp
+*.pyc
+*.pdb
+.DS_Store
+Thumbs.db

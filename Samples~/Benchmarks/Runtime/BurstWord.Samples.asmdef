@@ -1,0 +1,9 @@
+{
+  "name": "BurstWord.Samples",
+  "rootNamespace": "BurstWord",
+  "references": [
+    "BurstWord.Runtime",
+    "Unity.TextMeshPro",
+    "UnityEngine.UI"
+  ]
+}

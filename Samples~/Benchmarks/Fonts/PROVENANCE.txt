@@ -1,0 +1,11 @@
+Noto fonts from official notofonts distributions; unchanged font files.
+https://github.com/notofonts/noto-fonts/tree/main/hinted/ttf
+https://github.com/notofonts/noto-cjk/blob/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf
+Licenses: Noto-LICENSE.txt and NotoCJK-LICENSE.txt
+SHA-256:
+ceea25b464a656dc3b26849bab9356740401af62aedf1bfa8b7f0d9b75925b1b  NotoSansArabic-Regular.ttf
+2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b  NotoSansCJKsc-Regular.otf
+385e78e6359a9d88a0f243d53b1209d7548361ba2194e2b9ec779bcaa7e8949d  NotoSansDevanagari-Regular.ttf
+a7fa16fffb27bedb060a0866267c29e9859aeb9c21cc33f5b3aaf6eb062eca85  NotoSansHebrew-Regular.ttf
+404ddfb5ed0aaa6b6ec8a85700d682978992062d67da93903967b56cbd9a4acc  NotoSansThai-Regular.ttf
+c8f669ceb2c9c60ccf55198b305e08a997ffca79a38cc7eeb551e643cbe66505  NotoSerif-Regular.ttf

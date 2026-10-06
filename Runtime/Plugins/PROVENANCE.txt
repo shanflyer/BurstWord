@@ -1,0 +1,3 @@
+HarfBuzzSharp.NativeAssets.Win32 8.3.0, Windows x64.
+https://api.nuget.org/v3-flatcontainer/harfbuzzsharp.nativeassets.win32/8.3.0/harfbuzzsharp.nativeassets.win32.8.3.0.nupkg
+SHA-256: 4f1ae4fe10d5cef6e3b75df587c6c216eecd1b8b2b3adb0178d685079c906508

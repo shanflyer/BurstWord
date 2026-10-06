@@ -1,0 +1,11 @@
+{
+  "name": "BurstWord.Runtime",
+  "rootNamespace": "BurstWord",
+  "references": [
+    "Unity.TextMeshPro",
+    "Unity.Burst",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
+  ],
+  "allowUnsafeCode": true
+}

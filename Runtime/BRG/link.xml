@@ -1,0 +1,8 @@
+<linker>
+  <assembly fullname="UnityEngine.TextCoreFontEngineModule">
+    <type fullname="UnityEngine.TextCore.LowLevel.FontEngine">
+      <method name="TryAddGlyphToTexture" />
+      <method name="ResetAtlasTexture" />
+    </type>
+  </assembly>
+</linker>
