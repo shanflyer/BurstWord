@@ -6,7 +6,9 @@ The Unicode bidi, line-breaking and grapheme algorithms in `Runtime/ThirdParty/R
 
 ## HarfBuzz native library
 
-`Runtime/Plugins/x86_64/libHarfBuzzSharp.dll` comes from HarfBuzzSharp.NativeAssets.Win32 8.3.0. Its license, third-party notices, source URL and binary hash are retained in `Runtime/Plugins`. This binary is enabled only for Windows x64 Editor and standalone Player.
+The Windows, macOS, Linux and Android native libraries in `Runtime/Plugins` come from HarfBuzzSharp.NativeAssets 8.3.1.5 (native HarfBuzz 8.3.1). Original licenses, notices, source provenance and each binary's SHA-256 hash are retained in that directory. Plug-in metadata filters each library by platform and CPU.
+
+Apple and WebGL source integration uses upstream [HarfBuzz 8.3.1](https://github.com/harfbuzz/harfbuzz/tree/2b3631a866b3077d9d675caa4ec9010b342b5a7c). The transitive amalgamation sources and original copyright notices are retained in `Runtime/Plugins/HarfBuzzSource~`, with the upstream `COPYING` license. `hb-version.h` is generated from the upstream template for version 8.3.1. The small target wrappers and Xcode integration belong to BurstWord.
 
 ## Sample fonts
 

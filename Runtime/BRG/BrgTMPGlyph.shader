@@ -72,6 +72,7 @@ Shader "BurstWord/BRG TMP Glyph"
             Tags { "LightMode"="SRPDefaultUnlit" }
             HLSLPROGRAM
             #pragma target 4.5
+            #pragma only_renderers d3d11 metal vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma multi_compile_instancing
@@ -85,6 +86,7 @@ Shader "BurstWord/BRG TMP Glyph"
             Tags { "LightMode"="BurstWordOverlay" }
             HLSLPROGRAM
             #pragma target 4.5
+            #pragma only_renderers d3d11 metal vulkan
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma multi_compile_instancing

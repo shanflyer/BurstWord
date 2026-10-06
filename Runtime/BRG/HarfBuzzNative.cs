@@ -3,10 +3,14 @@ using System.Runtime.InteropServices;
 
 namespace BurstWord.BRG
 {
-    // HarfBuzz 8.3.0 C ABI. Handles belong to a renderer and are disposed on disable.
+    // HarfBuzz 8.3.1 C ABI. Handles belong to a renderer and are disposed on disable.
     internal static unsafe class HarfBuzzNative
     {
+#if (UNITY_IOS || UNITY_TVOS || UNITY_VISIONOS || UNITY_WEBGL) && !UNITY_EDITOR
+        private const string Library = "__Internal";
+#else
         private const string Library = "libHarfBuzzSharp";
+#endif
         [StructLayout(LayoutKind.Sequential)] internal struct Info { public uint glyph, mask, cluster, var1, var2; }
         [StructLayout(LayoutKind.Sequential)] internal struct Position { public int xAdvance, yAdvance, xOffset, yOffset; public uint var; }
         [StructLayout(LayoutKind.Sequential)] internal struct Feature { public uint tag, value, start, end; }

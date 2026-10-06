@@ -1,0 +1,63 @@
+[
+  {
+    "file": "x86_64/libHarfBuzzSharp.dll",
+    "package": "HarfBuzzSharp.NativeAssets.win32 8.3.1.5",
+    "member": "runtimes/win-x64/native/libHarfBuzzSharp.dll",
+    "sha256": "cf97ae00945e6f5290967ba4ff3051f1cd47a0758b7d9a7159fb352b33655d43"
+  },
+  {
+    "file": "Windows/x86/libHarfBuzzSharp.dll",
+    "package": "HarfBuzzSharp.NativeAssets.win32 8.3.1.5",
+    "member": "runtimes/win-x86/native/libHarfBuzzSharp.dll",
+    "sha256": "18fcfa3677b92e3a4ffce48119e98100625faf84db550f770e1883447f0bde8d"
+  },
+  {
+    "file": "Windows/ARM64/libHarfBuzzSharp.dll",
+    "package": "HarfBuzzSharp.NativeAssets.win32 8.3.1.5",
+    "member": "runtimes/win-arm64/native/libHarfBuzzSharp.dll",
+    "sha256": "e8c9923c68c08e83f632e18fec2c9dd812f64e1e553e4b6702b5396b3834f821"
+  },
+  {
+    "file": "macOS/libHarfBuzzSharp.dylib",
+    "package": "HarfBuzzSharp.NativeAssets.macos 8.3.1.5",
+    "member": "runtimes/osx/native/libHarfBuzzSharp.dylib",
+    "sha256": "f8e9ab02b74e68d151abc3781098c9201e57c392b827b40451515d42386d6b0d"
+  },
+  {
+    "file": "Linux/x86_64/libHarfBuzzSharp.so",
+    "package": "HarfBuzzSharp.NativeAssets.linux 8.3.1.5",
+    "member": "runtimes/linux-x64/native/libHarfBuzzSharp.so",
+    "sha256": "1d5c3afef13545bf34bf8f068b14e25ee619c3b6dee235c44e260fe61cb24018"
+  },
+  {
+    "file": "Android/arm64-v8a/libHarfBuzzSharp.so",
+    "package": "HarfBuzzSharp.NativeAssets.android 8.3.1.5",
+    "member": "runtimes/android-arm64/native/libHarfBuzzSharp.so",
+    "sha256": "cbba20cea0b38b57fde7b2993ae3b1a8226e65feefdf3c97e84d96349ff69e55"
+  },
+  {
+    "file": "Android/armeabi-v7a/libHarfBuzzSharp.so",
+    "package": "HarfBuzzSharp.NativeAssets.android 8.3.1.5",
+    "member": "runtimes/android-arm/native/libHarfBuzzSharp.so",
+    "sha256": "904fe3e9131ce31cb29dbc674dbe4f9459b6bdb39e1266d0350d5a1715f862d7"
+  },
+  {
+    "file": "Android/x86_64/libHarfBuzzSharp.so",
+    "package": "HarfBuzzSharp.NativeAssets.android 8.3.1.5",
+    "member": "runtimes/android-x64/native/libHarfBuzzSharp.so",
+    "sha256": "44657fb69698c0fe696aed1baf8ad11c4bf67b2b6edab5fb432366f84cea4ae6"
+  },
+  {
+    "file": "Android/x86/libHarfBuzzSharp.so",
+    "package": "HarfBuzzSharp.NativeAssets.android 8.3.1.5",
+    "member": "runtimes/android-x86/native/libHarfBuzzSharp.so",
+    "sha256": "1bc23ce0c19cecb073d6c48674bdf234487bc0a670b2f85f69332f351e5c01fb"
+  },
+  {
+    "file": "HarfBuzzSource~",
+    "source": "https://github.com/harfbuzz/harfbuzz/tree/8.3.1",
+    "commit": "2b3631a866b3077d9d675caa4ec9010b342b5a7c",
+    "changes": "Only generated hb-version.h (8.3.1); transitive amalgamation sources retained unmodified.",
+    "files": 330
+  }
+]

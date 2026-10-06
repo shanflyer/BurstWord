@@ -228,7 +228,7 @@ namespace BurstWord.BRG
                     }
                     return;
                 }
-                if (!isActiveAndEnabled || brg == null) { if (handles != null) Array.Clear(handles, 0, count); return; }
+                if (!isActiveAndEnabled || !IsInitialized) { if (handles != null) Array.Clear(handles, 0, count); return; }
                 preparingBatch = true;
                 using var generateScope = GenerateMarker.Auto();
                 EnsurePreparationCapacity(ref preparationRequests, count);

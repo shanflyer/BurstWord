@@ -89,7 +89,7 @@ namespace BurstWord.BRG
                 nextOverlay = elapsed + 0.5f;
                 overlay = $"Mode: {ModeNames[(int)workload]}   Rate: {emissionsPerSecond:N0}/s\n"+
                     $"Active text: {textRenderer.ActiveCount:N0}/{textRenderer.Capacity:N0}   Glyphs: {textRenderer.ActiveGlyphCount:N0}\n"+
-                    $"BRG commands: {textRenderer.DrawCommandCount}   Objects per text: 0\n"+
+                    $"Backend: {textRenderer.ActiveBackend}   Draw commands: {textRenderer.DrawCommandCount}   Objects per text: 0\n"+
                     $"Emitted: {textRenderer.EmittedCount:N0}   Dropped: {textRenderer.DroppedCount:N0}   Layout failures: {textRenderer.FailedLayoutCount:N0}\n"+
                     $"Missing glyphs/sprites/shaping sources: {textRenderer.MissingGlyphCount}/{textRenderer.MissingSpriteCount}/{textRenderer.UnavailableShapingCount}";
 
@@ -166,6 +166,13 @@ namespace BurstWord.BRG
         }
 
         public void ChangeRate(int rate) { emissionsPerSecond=Mathf.Max(0,rate);rateInput=emissionsPerSecond.ToString();ResetPressure(); }
+        public void ChangeBackend(BrgDamageTextRenderer.RenderBackend backend)
+        {
+            textRenderer.enabled = false;
+            textRenderer.renderBackend = backend;
+            textRenderer.enabled = true;
+            WarmFonts(); ResetPressure();
+        }
         private void GrowCapacity()
         {
             int desired = (int)System.Math.Min((long)textRenderer.Capacity * 2, int.MaxValue);
@@ -205,6 +212,13 @@ namespace BurstWord.BRG
             panelScroll=GUI.BeginScrollView(new Rect(0,0,Mathf.Min(625,Screen.width),Mathf.Min(Screen.height,710)),panelScroll,new Rect(0,0,610,700));
             GUI.Box(new Rect(10,10,600,680),GUIContent.none);GUILayout.BeginArea(new Rect(20,18,580,660));
             GUILayout.Label(overlay);GUILayout.Label(statistics==null?"Preparing statistics...":statistics.Text);
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < 3; i++)
+            {
+                var backend = (BrgDamageTextRenderer.RenderBackend)i;
+                if (GUILayout.Button((textRenderer.renderBackend == backend ? "* " : "") + backend)) ChangeBackend(backend);
+            }
+            GUILayout.EndHorizontal();
             for(int row=0;row<2;row++)
             {
                 GUILayout.BeginHorizontal();

@@ -133,10 +133,12 @@ namespace BurstWord.BRG
         private static void BeforeCameraRender(ScriptableRenderContext context, Camera camera)
         {
             foreach (var renderer in spatialRenderers)
-                if (renderer != null && renderer.worldCamera == camera && renderer.brg != null)
+                if (renderer != null && renderer.worldCamera == camera && renderer.IsInitialized)
                 {
                     renderer.UpdateAnimations();
                     renderer.UpdateSpatial();
+                    if (!renderer.UsingBrg && renderer.sortingMode == SortingMode.SceneTransparent)
+                        renderer.DrawInstanced(null);
                     // Damage may be emitted by another LateUpdate after this manager ran.
                     using (UploadMarker.Auto())
                         foreach(var page in renderer.glyphPages)
@@ -154,8 +156,11 @@ namespace BurstWord.BRG
             liveLabelOrders = new NativeArray<ulong>(labels.Length, Allocator.Persistent);
             mergeResult = new NativeArray<int>(1, Allocator.Persistent);
             radixIndices=new int[labels.Length]; radixScratch=new int[labels.Length];
-            labelBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 16 + labels.Length * 12, 4);
-            labelBuffer.SetData(new Vector4[4]);
+            if (UsingBrg)
+            {
+                labelBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 16 + labels.Length * 12, 4);
+                labelBuffer.SetData(new Vector4[4]);
+            }
             poseDirtyCount = sortedCount = animatedWorldLabels = animatedLabels = followingLabelCount = 0; orderDirty = true;
             lastSortedSequence = labelSequence; existingPoseChanged = false;
             ResetPoseSpans();
@@ -210,7 +215,7 @@ namespace BurstWord.BRG
         {
             using (preparingBatch ? default(Unity.Profiling.ProfilerMarker.AutoScope) : GenerateMarker.Auto())
             {
-                if (!isActiveAndEnabled || brg == null || string.IsNullOrEmpty(text)) return default;
+                if (!isActiveAndEnabled || !IsInitialized || string.IsNullOrEmpty(text)) return default;
                 if (freeLabelCount == 0) { DroppedCount++; return default; }
                 bool built;
                 using (LayoutMarker.Auto()) built = BuildLayout(text, color);
@@ -383,7 +388,12 @@ namespace BurstWord.BRG
         }
         private void FlushLabelTransforms()
         {
-            if (poseDirtyCount == 0 || labelBuffer == null) return;
+            if (poseDirtyCount == 0) return;
+            if (labelBuffer == null)
+            {
+                for (int i = 0; i < poseDirtyCount; i++) poseDirty[poseDirtyIds[i]] = 0;
+                poseDirtyCount = 0; ResetPoseSpans(); return;
+            }
             bool sparse=false;
             for(int field=0;field<3;field++)
                 if(poseFieldCount[field]>0 && poseLast[field]-poseFirst[field]+1>poseFieldCount[field]*5/4+8) sparse=true;
@@ -436,7 +446,8 @@ namespace BurstWord.BRG
         {
             BindAnimation(material);
             bool scene = sortingMode == SortingMode.SceneTransparent;
-            material.SetBuffer("_BurstLabels", labelBuffer); material.SetInt("_BurstLabelCapacity", labels.Length);
+            if (labelBuffer != null) material.SetBuffer("_BurstLabels", labelBuffer);
+            material.SetInt("_BurstLabelCapacity", labels.Length);
             material.SetFloat("_BurstZTest", scene ? (float)CompareFunction.LessEqual : (float)CompareFunction.Always);
             material.SetFloat("_BurstSortingMode", (float)sortingMode);
             material.SetFloat("_BurstPlainSdfFastPath", usePlainSdfFastPath ? 1 : 0);

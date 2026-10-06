@@ -30,8 +30,11 @@ namespace BurstWord.BRG
         private void InitializeAnimations()
         {
             animationLabels = new Vector4[Capacity];
-            animationLabelBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Capacity, 16);
-            animationLabelBuffer.SetData(animationLabels);
+            if (UsingBrg)
+            {
+                animationLabelBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Capacity, 16);
+                animationLabelBuffer.SetData(animationLabels);
+            }
         }
         private int RegisterAnimation(BrgTextAnimation asset)
         {
@@ -59,7 +62,7 @@ namespace BurstWord.BRG
         }
         private void BindAnimation(Material material)
         {
-            material.SetBuffer("_BurstAnimationLabels", animationLabelBuffer);
+            if (animationLabelBuffer != null) material.SetBuffer("_BurstAnimationLabels", animationLabelBuffer);
             material.SetTexture("_BurstAnimationCurves", animationTexture != null ? animationTexture : Texture2D.whiteTexture);
             material.SetVector("_BurstAnimationInfo", new Vector4(activeAnimationLabels > 0 ? 1 : 0,
                 BrgTextAnimation.SampleCount, Mathf.Max(1, animationRows), 0));
@@ -75,7 +78,7 @@ namespace BurstWord.BRG
                 {
                     if (animationTexture != null) DestroyAnimationTexture();
                     animationRows = Mathf.NextPowerOfTwo(Mathf.Max(4, animationEntries.Count * BrgTextAnimation.Rows));
-                    animationTexture = new Texture2D(BrgTextAnimation.SampleCount, animationRows, TextureFormat.RGBAFloat, false, true)
+                    animationTexture = new Texture2D(BrgTextAnimation.SampleCount, animationRows, (SystemInfo.IsFormatSupported(UnityEngine.Experimental.Rendering.GraphicsFormat.R32G32B32A32_SFloat, UnityEngine.Experimental.Rendering.FormatUsage.Linear) ? TextureFormat.RGBAFloat : TextureFormat.RGBAHalf), false, true)
                         { name = "BurstWord shared animation curves", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
                 }
                 bool dirty = rebuild;
@@ -91,7 +94,7 @@ namespace BurstWord.BRG
                 if (dirty)
                 {
                     animationTexture.Apply(false, false);
-                    AnimationUploadBytesLastFrame += BrgTextAnimation.SampleCount * animationRows * 16;
+                    AnimationUploadBytesLastFrame += BrgTextAnimation.SampleCount * animationRows * (animationTexture.format == TextureFormat.RGBAFloat ? 16 : 8);
                     foreach (var page in glyphPages) BindAnimation(page.Material);
                     orderDirty = true;
                 }
@@ -105,8 +108,11 @@ namespace BurstWord.BRG
             if (animationFirst <= animationLast)
             {
                 int count = animationLast - animationFirst + 1;
-                animationLabelBuffer.SetData(animationLabels, animationFirst, animationFirst, count);
-                AnimationUploadBytesLastFrame += count * 16;
+                if (animationLabelBuffer != null)
+                {
+                    animationLabelBuffer.SetData(animationLabels, animationFirst, animationFirst, count);
+                    AnimationUploadBytesLastFrame += count * 16;
+                }
                 animationFirst = int.MaxValue; animationLast = -1;
             }
         }

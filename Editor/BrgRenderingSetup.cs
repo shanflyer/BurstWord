@@ -49,20 +49,31 @@ namespace BurstWord.Baseline.Editor
             if(settings.Length==0)return false;
             var serialized=new SerializedObject(settings[0]);var stripping=serialized.FindProperty("m_BrgStripping");
             bool changed = false;
-            var glyphShader = Shader.Find("BurstWord/BRG TMP Glyph");
-            var included = serialized.FindProperty("m_AlwaysIncludedShaders");
-            if (glyphShader != null && included != null)
+            foreach (string shaderName in new[] { "BurstWord/BRG TMP Glyph", "BurstWord/Instanced TMP Glyph" })
             {
-                bool found = false;
-                for (int i = 0; i < included.arraySize; i++)
-                    if (included.GetArrayElementAtIndex(i).objectReferenceValue == glyphShader) { found = true; break; }
-                if (!found)
+                var glyphShader = Shader.Find(shaderName);
+                var included = serialized.FindProperty("m_AlwaysIncludedShaders");
+                if (glyphShader != null && included != null)
                 {
-                    int index = included.arraySize;
-                    included.arraySize++;
-                    included.GetArrayElementAtIndex(index).objectReferenceValue = glyphShader;
-                    changed = true;
+                    bool found = false;
+                    for (int i = 0; i < included.arraySize; i++)
+                        if (included.GetArrayElementAtIndex(i).objectReferenceValue == glyphShader) { found = true; break; }
+                    if (!found)
+                    {
+                        int index = included.arraySize;
+                        included.arraySize++;
+                        included.GetArrayElementAtIndex(index).objectReferenceValue = glyphShader;
+                        changed = true;
+                    }
                 }
+            }
+            // Runtime-created instancing materials have no scene Renderer for Unity's
+            // StripUnused scan. Retain the regular INSTANCING_ON variants as well.
+            var instancing = serialized.FindProperty("m_InstancingStripping");
+            if (instancing != null)
+            {
+                int keep = System.Array.FindIndex(instancing.enumNames, name => name.Replace("_", "").Replace(" ", "").Equals("KeepAll", System.StringComparison.OrdinalIgnoreCase));
+                if (keep >= 0 && instancing.enumValueIndex != keep) { instancing.enumValueIndex = keep; changed = true; }
             }
             if(stripping==null) { if(changed)serialized.ApplyModifiedPropertiesWithoutUndo();return changed; }
             int keepAll=System.Array.FindIndex(stripping.enumNames,name=>name.Replace("_","").Replace(" ","").Equals("KeepAll",System.StringComparison.OrdinalIgnoreCase));

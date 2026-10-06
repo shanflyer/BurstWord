@@ -1,8 +1,8 @@
 {
   "name": "com.shanflyer.burstword",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "BurstWord",
-  "description": "High-throughput damage text using TMP font resources, GPU animation and BatchRendererGroup. Includes a constrained AnimationClip editor and two ready-made benchmark scenes.",
+  "description": "High-throughput damage text using TMP resources, GPU animation and BRG with automatic GPU instancing fallback. Includes cross-platform shaping, an AnimationClip editor and ready-made benchmark scenes.",
   "unity": "2022.3",
   "license": "MIT",
   "author": {

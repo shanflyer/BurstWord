@@ -11,6 +11,12 @@
 *.mat text eol=lf
 *.asset text eol=lf
 *.dll binary
+*.so binary
+*.dylib binary
+*.cpp text eol=lf
+*.cc text eol=lf
+*.h text eol=lf
+*.hh text eol=lf
 *.bytes binary
 *.ttf binary
 *.otf binary

@@ -28,7 +28,7 @@ namespace BurstWord.BRG
         public float risePixels = 90;
         public Vector2 referenceResolution = new Vector2(1920, 1080);
 
-        public string BackendName => "TMP Font Asset + BRG (no label GameObjects)";
+        public string BackendName => $"TMP Font Asset + {ActiveBackend} (no label GameObjects)";
         public int Capacity => labels == null ? capacity : labels.Length;
         public int ActiveCount { get; private set; }
         public int CreatedCount => 0;
@@ -48,7 +48,7 @@ namespace BurstWord.BRG
         internal bool useContiguousGlyphAllocation = true;
         // Diagnostic A/B switch; no rendering or ordering semantics change.
         [NonSerialized] public bool useContiguousIndexFastPath = true;
-        public bool IsInitialized => brg != null;
+        public bool IsInitialized => quad != null && labels != null;
 
         private struct Label
         {
@@ -114,16 +114,27 @@ namespace BurstWord.BRG
 
         public void Initialize()
         {
-            if (brg != null) return;
+            if (IsInitialized) return;
             if (font == null) font = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
             if (worldCamera == null) worldCamera = Camera.main;
-            if (glyphShader == null) glyphShader = Shader.Find("BurstWord/BRG TMP Glyph");
-            if (font == null || worldCamera == null || glyphShader == null || !glyphShader.isSupported ||
-                GraphicsSettings.currentRenderPipeline == null)
+            if (font == null || worldCamera == null || GraphicsSettings.currentRenderPipeline == null || !SelectBackend())
             {
-                Debug.LogError($"BRG text initialization failed: font={font != null}, camera={worldCamera != null}, shader={glyphShader != null}, supported={glyphShader != null && glyphShader.isSupported}, SRP={GraphicsSettings.currentRenderPipeline != null}.", this);
+                Debug.LogError($"Damage text initialization failed: font={font != null}, camera={worldCamera != null}, shader={glyphShader != null}, supported={glyphShader != null && glyphShader.isSupported}, SRP={GraphicsSettings.currentRenderPipeline != null}, instancing={SystemInfo.supportsInstancing}.", this);
                 enabled = false;
                 return;
+            }
+            if (UsingBrg)
+            {
+                try { brg = new BatchRendererGroup(OnPerformCulling, IntPtr.Zero); }
+                catch (Exception error)
+                {
+                    ActiveBackend = RenderBackend.Instancing;
+                    BackendReason = "BRG initialization failed: " + error.Message;
+                    glyphShader = Shader.Find("BurstWord/Instanced TMP Glyph");
+                    if (!SystemInfo.supportsInstancing || glyphShader == null || !glyphShader.isSupported)
+                    { Debug.LogError(BackendReason, this); enabled = false; return; }
+                    InitializeInstancing();
+                }
             }
             capacity = Mathf.Max(1, capacity);
             fontSize = Mathf.Max(1, fontSize);
@@ -143,11 +154,15 @@ namespace BurstWord.BRG
             quad.vertices = new[] { new Vector3(0, 0, 0), new Vector3(0, 1, 0), new Vector3(1, 1, 0), new Vector3(1, 0, 0) };
             quad.uv = new[] { Vector2.zero, Vector2.up, Vector2.one, Vector2.right };
             quad.triangles = new[] { 0, 1, 2, 0, 2, 3 };
-            quad.bounds = new Bounds(Vector3.zero, Vector3.one);
+            // Match BRG's conservative visibility: shader expansion and GPU motion are not
+            // represented by the quad's vertices. Keep the center correct for scene sorting.
+            quad.bounds = new Bounds(Vector3.zero, Vector3.one * (UsingBrg ? 1 : worldCamera.farClipPlane * 2 + 100));
             quad.UploadMeshData(true);
-            brg = new BatchRendererGroup(OnPerformCulling, IntPtr.Zero);
-            brg.SetEnabledViewTypes(new[] { BatchCullingViewType.Camera });
-            meshId = brg.RegisterMesh(quad);
+            if (UsingBrg)
+            {
+                brg.SetEnabledViewTypes(new[] { BatchCullingViewType.Camera });
+                meshId = brg.RegisterMesh(quad);
+            }
             // The shader expands world anchors in screen space. No extra distance/visibility drops
             // are introduced relative to the UGUI baseline. Only the benchmark camera renders it.
             UpdateBounds();
@@ -155,7 +170,7 @@ namespace BurstWord.BRG
 
         public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1)
         {
-            if (!isActiveAndEnabled || brg == null) return false;
+            if (!isActiveAndEnabled || !IsInitialized) return false;
             if (freeLabelCount == 0) { DroppedCount++; return false; }
             // Keep the same integer-to-string work as the baseline for this first comparison.
             return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift, durationScale);
@@ -313,7 +328,7 @@ namespace BurstWord.BRG
 
         private void LateUpdate()
         {
-            if (brg == null) return;
+            if (!IsInitialized) return;
             float now = Now;
             UpdateAnimations();
             using (RetireMarker.Auto())
@@ -342,7 +357,7 @@ namespace BurstWord.BRG
 
         private void UpdateBounds()
         {
-            if (worldCamera != null)
+            if (brg != null && worldCamera != null)
                 brg.SetGlobalBounds(new Bounds(worldCamera.transform.position, Vector3.one * (worldCamera.farClipPlane * 2 + 100)));
         }
 
@@ -371,6 +386,7 @@ namespace BurstWord.BRG
             DisposeTypography();
             DisposeSpatial();
             DisposeAnimations();
+            DisposeInstancing();
             if (brg != null) { brg.Dispose(); brg = null; }
             DestroyGeneratedObject(quad); quad = null;
             labels = null; freeLabels = null; links = null; freeLinks = null;
@@ -421,6 +437,13 @@ namespace BurstWord.BRG
             public readonly int Index;
             private readonly List<Texture> textures = new List<Texture>();
             private readonly List<Vector4> resources = new List<Vector4>();
+            public void BindInstancedResource(MaterialPropertyBlock block, int id)
+            {
+                var settings = resources[id * 10 + 4];
+                block.SetTexture(MainTextureId, textures[(int)settings.z]);
+                for (int field = 0; field < 10; field++) block.SetVector(ResourcePropertyIds[field], resources[id * 10 + field]);
+                settings.z = 0; block.SetVector(ResourcePropertyIds[4], settings);
+            }
             private GraphicsBuffer resourceBuffer;
             private int resourceCapacity;
             public GlyphPage(BrgDamageTextRenderer renderer)
@@ -437,7 +460,7 @@ namespace BurstWord.BRG
                 if (textureId < 0)
                 {
                     textureId = textures.Count; textures.Add(texture);
-                    Material.SetTexture("_BurstAtlas" + textureId, texture);
+                    if (owner != null) Material.SetTexture("_BurstAtlas" + textureId, texture);
                 }
                 // Match the original shader defaults and TMP keyword interpretation exactly.
                 float F(string name, float fallback = 0) => source != null && source.HasProperty(name) ? source.GetFloat(name) : fallback;
@@ -460,6 +483,7 @@ namespace BurstWord.BRG
                 resources.Add(new Vector4(F("_ScaleRatioB",1),F("_ScaleRatioC",1),underlay?1:0,source != null && source.IsKeywordEnabled("UNDERLAY_INNER")?1:0));
                 resources.Add(new Vector4(F("_GlowOffset"),F("_GlowInner"),F("_GlowOuter"),F("_GlowPower",.75f)));
                 resources.Add(new Vector4(source != null && source.IsKeywordEnabled("GLOW_ON")?1:0,1f/texture.width,1f/texture.height,0));
+                if (owner == null) return id;
                 if (resourceBuffer == null || resources.Count > resourceCapacity)
                 {
                     resourceBuffer?.Dispose(); resourceCapacity = Mathf.NextPowerOfTwo(Mathf.Max(160,resources.Count));
@@ -483,6 +507,7 @@ namespace BurstWord.BRG
                 var live = LiveSlots;
                 Array.Resize(ref live, size);
                 LiveSlots = live;
+                if (owner == null) { cursor = previousSize; dirtyFull = true; return; }
                 buffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, (64 + size * 16 * values.Length) / 4, 4);
                 buffer.SetData(new Vector4[4]);
                 var metadata = new NativeArray<MetadataValue>(values.Length, Allocator.Temp);
@@ -582,7 +607,7 @@ namespace BurstWord.BRG
             private int UploadSpan(int first, int last)
             {
                 int count = last - first;
-                if (count <= 0) return 0;
+                if (count <= 0 || buffer == null) return 0;
                 for (int i = 0; i < values.Length; i++)
                     buffer.SetData(values[i], first, 4 + i * allocated + first, count);
                 UploadCalls += values.Length;
@@ -591,10 +616,9 @@ namespace BurstWord.BRG
 
             public void Dispose()
             {
-                owner.RemoveBatch(BatchId);
-                buffer.Dispose();
+                if (owner != null) { owner.RemoveBatch(BatchId); owner.UnregisterMaterial(MaterialId); }
+                buffer?.Dispose();
                 resourceBuffer?.Dispose();
-                owner.UnregisterMaterial(MaterialId);
                 DestroyGeneratedObject(Material);
             }
         }

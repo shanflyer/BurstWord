@@ -42,6 +42,7 @@ namespace BurstWord.BRG
                     var drawing = CreateDrawingSettings(tag, ref renderingData, SortingCriteria.None);
                     drawing.enableInstancing = true; drawing.perObjectData = PerObjectData.None;
                     context.DrawRenderers(renderingData.cullResults, ref drawing, ref filter);
+                    BrgDamageTextRenderer.DrawInstancingOverlays(renderingData.cameraData.camera, command);
                 }
                 context.ExecuteCommandBuffer(command); CommandBufferPool.Release(command);
             }

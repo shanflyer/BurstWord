@@ -30,6 +30,13 @@ PluginImporter:
       enabled: 1
       settings:
         CPU: x86_64
+  - first:
+      Windows Store Apps: WindowsStoreApps
+    second:
+      enabled: 1
+      settings:
+        CPU: X64
+        SDK: AnySDK
   userData:
   assetBundleName:
   assetBundleVariant:
