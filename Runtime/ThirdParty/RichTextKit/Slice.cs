@@ -21,7 +21,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Topten.RichTextKit.Utils
+namespace BurstWord.Internal.RichTextKit.Utils
 {
     /// <summary>
     /// Represents a slice of an array

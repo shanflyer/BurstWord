@@ -1,4 +1,4 @@
-﻿// RichTextKit
+// RichTextKit
 // Copyright © 2019-2020 Topten Software. All Rights Reserved.
 // 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may 
@@ -15,7 +15,7 @@
 
 using System.Runtime.CompilerServices;
 
-namespace Topten.RichTextKit.Utils
+namespace BurstWord.Internal.RichTextKit.Utils
 {
     /// <summary>
     /// Provides a mapped view of an underlying slice array, selecting arbitrary indicies

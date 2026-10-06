@@ -6,6 +6,6 @@
 
 排序和空间模式都可切换；目标移动/旋转/缩放用于检查跟随。GPU 动画按钮切换线性动画和四个动画预设。F1 隐藏/恢复面板。
 
-字体来源使用 TMP_FontAsset 与资源目录中的 OpenType 数据，复杂语言由 HarfBuzz 和 Unicode 排版组件支持。新增 TMP 字体后用 **Tools → BurstWord → Prepare Font Sources** 更新字体源。字体本身仍需要包含所需字形；缺字、Sprite 或塑形源在面板中显示。
+默认只使用 TMP_FontAsset 字形数据，不强制外部塑形库。双向和断行规则由内置 Unicode 算法处理；需要阿拉伯连写、印度文字重排等完整塑形时，由使用者选择可选适配器。安装 HarfBuzz 适配包后，给 Renderer 的 Text Shaper 指定包内 HarfBuzz 资源即可；字体源在进入 Play 和构建前自动准备。其他插件通过公开接口接入，见 SHAPING.md。面板显示当前排版提供者。字体仍需要覆盖目标字形。
 
 支持富文本、多个字体/材质、装饰线、上下标、Sprite/Emoji、双向文本、复杂字形、连字与字距、按词/字形簇换行。正常渲染与缓存/Job 优化保留；历史验证入口、逐帧记录和详细文件导出已删除。

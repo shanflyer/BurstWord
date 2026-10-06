@@ -18,9 +18,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Topten.RichTextKit.Utils;
+using BurstWord.Internal.RichTextKit.Utils;
 
-namespace Topten.RichTextKit
+namespace BurstWord.Internal.RichTextKit
 {
     /// <summary>
     /// Implementation of Unicode Bidirection Algorithm (UAX #9)

@@ -7,5 +7,30 @@
     "Unity.RenderPipelines.Universal.Runtime",
     "Unity.RenderPipelines.Core.Runtime"
   ],
-  "allowUnsafeCode": true
+  "allowUnsafeCode": true,
+  "defineConstraints": [
+    "BURSTWORD_TMP || BURSTWORD_UGUI_TMP"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.textmeshpro",
+      "expression": "3.0.0",
+      "define": "BURSTWORD_TMP"
+    },
+    {
+      "name": "com.unity.ugui",
+      "expression": "2.0.0",
+      "define": "BURSTWORD_UGUI_TMP"
+    },
+    {
+      "name": "com.unity.render-pipelines.universal",
+      "expression": "17.0.0",
+      "define": "BURSTWORD_URP_RENDER_GRAPH"
+    },
+    {
+      "expression": "3.2.0-pre.1",
+      "define": "BURSTWORD_TEXTCORE_PAIRS",
+      "name": "com.unity.textmeshpro"
+    }
+  ]
 }

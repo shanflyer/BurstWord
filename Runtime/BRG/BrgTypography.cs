@@ -2,11 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using TMPro;
-using Topten.RichTextKit;
-using Topten.RichTextKit.Utils;
+using BurstWord.Typography;
+using BurstWord.Internal.RichTextKit;
+using BurstWord.Internal.RichTextKit.Utils;
 using UnityEngine;
 using UnityEngine.TextCore;
 using UnityEngine.TextCore.LowLevel;
+#if BURSTWORD_UGUI_TMP || BURSTWORD_TEXTCORE_PAIRS
+using GlyphPairRecord = UnityEngine.TextCore.LowLevel.GlyphPairAdjustmentRecord;
+#else
+using GlyphPairRecord = TMPro.TMP_GlyphPairAdjustmentRecord;
+#endif
 
 namespace BurstWord.BRG
 {
@@ -17,6 +23,20 @@ namespace BurstWord.BRG
         public bool enableKerning = true;
         public bool enableLigatures = true;
         public bool enableShaping = true;
+        [Tooltip("Optional shaping adapter. None uses TMP glyph data without an external shaping library.")]
+        public TextShaperAsset textShaper;
+        private ITextShaper runtimeShaper;
+        private ITextShaper SelectedShaper => runtimeShaper ?? textShaper;
+        private bool ShapingEnabled => enableShaping && SelectedShaper != null && !shapingUnavailable;
+        public string ShaperName => ShapingEnabled ? SelectedShaper.Name : "TMP glyph data";
+        /// <summary>Switch providers on the main thread. Clears live text, sessions and all cached layouts.</summary>
+        public void SetTextShaper(ITextShaper provider)
+        {
+            bool restart = isActiveAndEnabled;
+            if (restart) enabled = false;
+            runtimeShaper = provider;
+            if (restart) enabled = true;
+        }
         [Tooltip("Width in reference-resolution pixels; zero disables automatic wrapping.")]
         [Min(0)] public float wrapWidth;
         public TMP_FontAsset[] additionalFonts;
@@ -67,7 +87,7 @@ namespace BurstWord.BRG
         private readonly List<Run> runs = new List<Run>(16);
         private readonly List<int> visualRuns = new List<int>(16);
         private readonly Dictionary<TMP_FontAsset, ShapingFace> shapingFaces = new Dictionary<TMP_FontAsset, ShapingFace>();
-        private readonly Dictionary<ulong, ResolvedGlyph> styledGlyphs = new Dictionary<ulong, ResolvedGlyph>();
+        private readonly Dictionary<(long, uint, bool, bool), ResolvedGlyph> styledGlyphs = new Dictionary<(long, uint, bool, bool), ResolvedGlyph>();
         private readonly Bidi bidi = new Bidi();
         private readonly BidiData bidiData = new BidiData();
         private readonly LineBreaker lineBreaker = new LineBreaker();
@@ -76,32 +96,34 @@ namespace BurstWord.BRG
         private sbyte[] levels = new sbyte[128];
         private float[] advances = new float[128];
         private bool[] breakAfter = new bool[128];
-        private IntPtr shapingBuffer;
+        private readonly List<TextShapingGlyph> shapingOutput = new List<TextShapingGlyph>(128);
+        private TextShapingFunctions shapingFunctions;
         private bool shapingUnavailable, warnedSource;
         private Texture2D solidTexture;
-        private readonly Dictionary<(int, int, int), int> batchLookup = new Dictionary<(int, int, int), int>();
+        private readonly Dictionary<(long, long, long), int> batchLookup = new Dictionary<(long, long, long), int>();
         private static readonly Dictionary<GlyphRenderMode, int> atlasModes = new Dictionary<GlyphRenderMode, int>();
         private readonly Dictionary<uint, uint> unicodeScripts = new Dictionary<uint, uint>();
-        private readonly Dictionary<(int, uint), (TMP_SpriteAsset asset, int index)> spriteUnicodeCache =
-            new Dictionary<(int, uint), (TMP_SpriteAsset asset, int index)>();
+        private readonly Dictionary<(long, uint), (TMP_SpriteAsset asset, int index)> spriteUnicodeCache =
+            new Dictionary<(long, uint), (TMP_SpriteAsset asset, int index)>();
         private readonly struct GeometryKey : IEquatable<GeometryKey>
         {
-            private readonly int asset, material, flags;
+            private readonly long asset, material;
+            private readonly int flags;
             private readonly uint glyph;
             private readonly float size;
-            public GeometryKey(int asset, uint glyph, int material, float size, bool bold, bool italic, bool alternative)
+            public GeometryKey(long asset, uint glyph, long material, float size, bool bold, bool italic, bool alternative)
             { this.asset = asset; this.glyph = glyph; this.material = material; this.size = size; flags = (bold ? 1 : 0) | (italic ? 2 : 0) | (alternative ? 4 : 0); }
             public bool Equals(GeometryKey other) => asset == other.asset && glyph == other.glyph && material == other.material && size.Equals(other.size) && flags == other.flags;
             public override bool Equals(object other) => other is GeometryKey key && Equals(key);
-            public override int GetHashCode() => unchecked((((asset * 397 ^ (int)glyph) * 397 ^ material) * 397 ^ size.GetHashCode()) * 397 ^ flags);
+            public override int GetHashCode() => unchecked((int)((((asset * 397 ^ (int)glyph) * 397 ^ material) * 397 ^ size.GetHashCode()) * 397 ^ flags));
         }
         private readonly Dictionary<GeometryKey, PositionedGlyph> geometry = new Dictionary<GeometryKey, PositionedGlyph>();
-        private readonly Dictionary<(int, int, bool), float> materialPadding = new Dictionary<(int, int, bool), float>();
+        private readonly Dictionary<(long, long, bool), float> materialPadding = new Dictionary<(long, long, bool), float>();
         private bool cachedTightGlyphBounds = true;
         private float RequiredPadding(TMP_FontAsset asset, Material material, bool syntheticBold)
         {
             if (!tightGlyphBounds) return asset.atlasPadding;
-            var key = (asset.GetInstanceID(), material.GetInstanceID(), syntheticBold);
+            var key = (BrgObjectIdentity.Of(asset), BrgObjectIdentity.Of(material), syntheticBold);
             if (materialPadding.TryGetValue(key, out float cached)) return cached;
             float Read(string property, float fallback = 0) => material.HasProperty(property) ? material.GetFloat(property) : fallback;
             float gradient = Read("_GradientScale", asset.atlasPadding + 1);
@@ -121,10 +143,10 @@ namespace BurstWord.BRG
         private sealed class PairCache
         {
             public int count = -1;
-            public readonly Dictionary<ulong, TMP_GlyphPairAdjustmentRecord> records = new Dictionary<ulong, TMP_GlyphPairAdjustmentRecord>();
+            public readonly Dictionary<ulong, GlyphPairRecord> records = new Dictionary<ulong, GlyphPairRecord>();
         }
         private readonly Dictionary<TMP_FontAsset, PairCache> pairCaches = new Dictionary<TMP_FontAsset, PairCache>();
-        private bool Pair(TMP_FontAsset asset, uint left, uint right, out TMP_GlyphPairAdjustmentRecord record)
+        private bool Pair(TMP_FontAsset asset, uint left, uint right, out GlyphPairRecord record)
         {
             var table = asset.fontFeatureTable.glyphPairAdjustmentRecords;
             if (!pairCaches.TryGetValue(asset, out var cache)) { cache = new PairCache(); pairCaches.Add(asset, cache); }
@@ -158,7 +180,7 @@ namespace BurstWord.BRG
 
         private int Batch(TMP_FontAsset asset, Texture texture, Material material, int mode)
         {
-            var key = (ReferenceEquals(asset, null) ? 0 : asset.GetInstanceID(), texture.GetInstanceID(), ReferenceEquals(material, null) ? 0 : material.GetInstanceID());
+            var key = (ReferenceEquals(asset, null) ? 0 : BrgObjectIdentity.Of(asset), BrgObjectIdentity.Of(texture), ReferenceEquals(material, null) ? 0 : BrgObjectIdentity.Of(material));
             if (batchLookup.TryGetValue(key, out int group)) return group;
             group = atlasBatches.Count; atlasBatches.Add(new AtlasBatch(this, glyphShader, asset, texture, material, mode));
             batchLookup.Add(key, group);
@@ -447,7 +469,7 @@ namespace BurstWord.BRG
         {
             var asset = spriteAsset != null ? spriteAsset : TMP_Settings.defaultSpriteAsset;
             if (asset == null) return false;
-            var key = (asset.GetInstanceID(), unicode);
+            var key = (BrgObjectIdentity.Of(asset), unicode);
             if (!spriteUnicodeCache.TryGetValue(key, out var found))
             {
                 var match = TMP_SpriteAsset.SearchForSpriteByUnicode(asset, unicode, true, out int id);
@@ -477,19 +499,24 @@ namespace BurstWord.BRG
         private bool ResolveStyled(uint unicode, TextStyle style, out ResolvedGlyph resolved, out bool alternative)
         {
             alternative = false;
-            ulong key = (ulong)(uint)style.font.GetInstanceID() << 32 | unicode | (style.bold ? 1UL << 30 : 0) | (style.italic ? 1UL << 31 : 0);
+            var key = (BrgObjectIdentity.Of(style.font), unicode, style.bold, style.italic);
             if (styledGlyphs.TryGetValue(key, out resolved)) { alternative = resolved.alternative; return true; }
             FontStyles styles = (style.bold ? FontStyles.Bold : FontStyles.Normal) | (style.italic ? FontStyles.Italic : FontStyles.Normal);
-            var character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, style.font, true, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
+            var character = LookupStyledCharacter(unicode, style.font, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
             if (character == null && additionalFonts != null)
                 foreach (var candidate in additionalFonts)
                 {
                     if (candidate == null) continue;
-                    character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, candidate, true, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
+                    character = LookupStyledCharacter(unicode, candidate, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
                     if (character != null) break;
                 }
             if (character == null && TMP_Settings.fallbackFontAssets != null)
-                character = TMP_FontAssetUtilities.GetCharacterFromFontAssets(unicode, style.font, TMP_Settings.fallbackFontAssets, true, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
+                foreach (var candidate in TMP_Settings.fallbackFontAssets)
+                {
+                    if (candidate == null) continue;
+                    character = LookupStyledCharacter(unicode, candidate, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
+                    if (character != null) break;
+                }
             if (character == null) { resolved = default; return false; }
             var source = (TMP_FontAsset)character.textAsset;
             resolved = new ResolvedGlyph { font = source, character = character, alternative = alternative };
@@ -497,21 +524,29 @@ namespace BurstWord.BRG
             return true;
         }
 
+        private static TMP_Character LookupStyledCharacter(uint unicode, TMP_FontAsset asset, FontStyles style, FontWeight weight, out bool alternative)
+        {
+            var character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, asset, true, style, weight, out alternative);
+            // New TMP returns null if no alternate bold/italic face is configured. The
+            // source glyph remains valid for our shader's synthetic weight/slant.
+            if (character == null && (style != FontStyles.Normal || weight != FontWeight.Regular))
+                character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, asset, true, FontStyles.Normal, FontWeight.Regular, out alternative);
+            return character;
+        }
+
         private void ResolveScripts(int start, int end)
         {
-            uint common = HarfBuzzNative.Tag('Z', 'y', 'y', 'y'), inherited = HarfBuzzNative.Tag('Z', 'i', 'n', 'h');
-            IntPtr unicode = IntPtr.Zero;
-            if (enableShaping && !shapingUnavailable)
-                try { unicode = HarfBuzzNative.hb_unicode_funcs_get_default(); }
-                catch (DllNotFoundException) { shapingUnavailable = true; }
-                catch (EntryPointNotFoundException) { shapingUnavailable = true; }
+            const uint common = 0x5a797979, inherited = 0x5a696e68;
+            var provider = ShapingEnabled ? SelectedShaper : null;
             uint last = common;
             for (int i = start; i < end; i++)
             {
                 uint script = common;
-                if (unicode != IntPtr.Zero && !unicodeScripts.TryGetValue(codePoints[i], out script))
+                if (provider != null && !unicodeScripts.TryGetValue(codePoints[i], out script))
                 {
-                    script = HarfBuzzNative.hb_unicode_script(unicode, codePoints[i]);
+                    try { script = provider.GetScript(codePoints[i]); }
+                    catch (DllNotFoundException) { DisableUnavailableShaper(); provider = null; script = common; }
+                    catch (EntryPointNotFoundException) { DisableUnavailableShaper(); provider = null; script = common; }
                     unicodeScripts[codePoints[i]] = script;
                 }
                 if (script != common && script != inherited) last = script;
@@ -521,9 +556,15 @@ namespace BurstWord.BRG
             for (int i = end - 1; i >= start; i--) { if (scripts[i] != common) last = scripts[i]; else scripts[i] = last; }
         }
 
+        private void DisableUnavailableShaper()
+        {
+            if (!shapingUnavailable) Debug.LogWarning("The selected shaping adapter is unavailable; using TMP glyph data.", this);
+            shapingUnavailable = true;
+        }
+
         private ShapingFace Face(TMP_FontAsset asset)
         {
-            if (!enableShaping || shapingUnavailable) return null;
+            if (!ShapingEnabled) return null;
             if (shapingFaces.TryGetValue(asset, out var face)) return face;
             var bytes = fontSources != null ? fontSources.Find(asset) : null;
             if (bytes == null)
@@ -535,14 +576,21 @@ namespace BurstWord.BRG
                     if (bytes != null) break;
                 }
             }
-            if (bytes == null)
+            if (bytes == null && SelectedShaper.RequiresFontData)
             {
                 UnavailableShapingCount++;
-                if (!warnedSource) { Debug.LogWarning("BRG shaping needs the original OpenType font data. Use Tools > BurstWord > Prepare Font Sources before building.", this); warnedSource = true; }
+                if (!warnedSource) { Debug.LogWarning("The selected shaping adapter needs the original font data. Check its font-data integration.", this); warnedSource = true; }
                 shapingFaces[asset] = null; return null;
             }
-            try { face = new ShapingFace(asset, bytes.bytes); shapingFaces.Add(asset, face); return face; }
-            catch (DllNotFoundException) { shapingUnavailable = true; Debug.LogError("BRG shaping native library is unavailable on this platform.", this); return null; }
+            try
+            {
+                var session = SelectedShaper.CreateFont(asset, bytes != null ? bytes.bytes : null);
+                if (session == null) { UnavailableShapingCount++; shapingFaces[asset] = null; return null; }
+                face = new ShapingFace(asset, bytes != null ? bytes.bytes : null, session);
+                shapingFaces.Add(asset, face); return face;
+            }
+            catch (DllNotFoundException) { shapingUnavailable = true; Debug.LogWarning("The selected shaping adapter is unavailable; using TMP glyph data.", this); return null; }
+            catch (EntryPointNotFoundException) { shapingUnavailable = true; Debug.LogWarning("The selected shaping adapter has an incompatible native library; using TMP glyph data.", this); return null; }
         }
 
         private static bool SameStyle(TextStyle a, TextStyle b) => ReferenceEquals(a.font, b.font) && ReferenceEquals(a.material, b.material) && a.size == b.size && a.baseline == b.baseline && a.spacing == b.spacing && a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.strike == b.strike && a.color == b.color;
@@ -562,7 +610,7 @@ namespace BurstWord.BRG
                 if (face != null)
                 {
                     var native = ShapeNativeCached(face, start, end, first, last, out int count);
-                    float scale = token.style.size / token.style.font.faceInfo.pointSize * token.style.font.faceInfo.scale / 64f;
+                    float scale = token.style.size / token.style.font.faceInfo.pointSize * token.style.font.faceInfo.scale;
                     bool cachedMeasurement = measure && useMeasuredLayout && TryCachedMeasurement(native, first, last);
                     for (int i = 0; !cachedMeasurement && i < count; i++)
                     {
@@ -605,13 +653,24 @@ namespace BurstWord.BRG
                             advance = t.glyph.character.glyph.metrics.horizontalAdvance * scale;
                             if (t.unicode == '\t') advance *= 4;
                         }
+                        float offsetX = 0, offsetY = 0;
+                        if (t.sprite == null && enableKerning)
+                        {
+                            float scale = GlyphScale(t, t.glyph);
+                            if (index > first && tokens[index - 1].glyph.character != null && SameStyle(tokens[index - 1].style, t.style) && Pair(t.glyph.font,
+                                tokens[index - 1].glyph.character.glyph.index, t.glyph.character.glyph.index, out var before))
+                            { var v = before.secondAdjustmentRecord.glyphValueRecord; offsetX += v.xPlacement * scale; offsetY += v.yPlacement * scale; advance += v.xAdvance * scale; }
+                            if (index + 1 < last && tokens[index + 1].glyph.character != null && SameStyle(tokens[index + 1].style, t.style) && Pair(t.glyph.font,
+                                t.glyph.character.glyph.index, tokens[index + 1].glyph.character.glyph.index, out var after))
+                            { var v = after.firstAdjustmentRecord.glyphValueRecord; offsetX += v.xPlacement * scale; offsetY += v.yPlacement * scale; advance += v.xAdvance * scale; }
+                        }
                         advance += t.style.spacing;
                         if (measure)
                         {
                             advances[index] += advance;
-                            if (useMeasuredLayout) { measuredBoundaries[index] = true; measuredGlyphs.Add(new MeasuredGlyph { resolved = t.glyph, cluster = index, advance = advance }); }
+                            if (useMeasuredLayout) { measuredBoundaries[index] = true; measuredGlyphs.Add(new MeasuredGlyph { resolved = t.glyph, cluster = index, advance = advance, x = offsetX, y = offsetY }); }
                         }
-                        else shaped.Add(new Shaped { tokenIndex = index, measuredIndex = -1, glyph = t.glyph, advance = advance });
+                        else shaped.Add(new Shaped { tokenIndex = index, measuredIndex = -1, glyph = t.glyph, advance = advance, x = offsetX, y = offsetY });
                     }
                 }
                 if (measure)
@@ -626,6 +685,7 @@ namespace BurstWord.BRG
             }
             if (measure && useMeasuredLayout)
             {
+                ValidateTmpMeasuredBoundaries();
                 // A style/font boundary inside a paragraph can still participate in
                 // contextual shaping. Without an end-of-buffer flag, keep it conservative.
                 for (int i = 1; i < measuredRuns.Count; i++)
@@ -673,9 +733,9 @@ namespace BurstWord.BRG
             y += token.style.baseline;
             var resolved = item.glyph;
             bool sprite = !ReferenceEquals(token.sprite, null);
-            var key = new GeometryKey(sprite ? token.sprite.GetInstanceID() : resolved.font.GetInstanceID(),
+            var key = new GeometryKey(sprite ? BrgObjectIdentity.Of(token.sprite) : BrgObjectIdentity.Of(resolved.font),
                 sprite ? token.spriteCharacter.glyph.index : resolved.character.glyph.index,
-                ReferenceEquals(token.style.material, null) ? 0 : token.style.material.GetInstanceID(),
+                ReferenceEquals(token.style.material, null) ? 0 : BrgObjectIdentity.Of(token.style.material),
                 token.style.size, token.style.bold, token.style.italic, token.alternative);
             if (geometry.TryGetValue(key, out var cached))
             {
@@ -753,23 +813,18 @@ namespace BurstWord.BRG
             private readonly Dictionary<uint, Texture2D> glyphTextures = new Dictionary<uint, Texture2D>();
             private readonly List<Texture2D> textures = new List<Texture2D>();
             private List<GlyphRect> free, used;
-            public ShapingFace(TMP_FontAsset asset, byte[] data)
+            public readonly ITextShapingFont Session;
+            public ShapingFace(TMP_FontAsset asset, byte[] data, ITextShapingFont session)
             {
-                font = asset; bytes = data;
-                IntPtr blob;
-                fixed (byte* pointer = data) blob = HarfBuzzNative.hb_blob_create(pointer, (uint)data.Length, 0, IntPtr.Zero, IntPtr.Zero); // DUPLICATE
-                var face = HarfBuzzNative.hb_face_create(blob, 0);
-                NativeFont = HarfBuzzNative.hb_font_create(face);
-                HarfBuzzNative.hb_ot_font_set_funcs(NativeFont);
-                HarfBuzzNative.hb_font_set_scale(NativeFont, (int)font.faceInfo.pointSize * 64, (int)font.faceInfo.pointSize * 64);
-                HarfBuzzNative.hb_font_make_immutable(NativeFont);
-                HarfBuzzNative.hb_face_destroy(face); HarfBuzzNative.hb_blob_destroy(blob);
+                font = asset; bytes = data; Session = session;
+                NativeFont = new IntPtr(BrgObjectIdentity.Of(asset)); // Cache identity only; never a native ABI handle.
                 foreach (var glyph in font.glyphTable) glyphs[glyph.index] = new ResolvedGlyph { font = font, character = new TMP_Character(0, font, glyph) };
             }
             public bool Resolve(uint index, out ResolvedGlyph resolved)
             {
                 if (glyphs.TryGetValue(index, out resolved)) return true;
-                if (FontEngine.LoadFontFace(bytes, (int)font.faceInfo.pointSize) != FontEngineError.Success) return false;
+                if (bytes != null ? FontEngine.LoadFontFace(bytes, (int)font.faceInfo.pointSize) != FontEngineError.Success :
+                    font.sourceFontFile == null || FontEngine.LoadFontFace(font.sourceFontFile, (int)font.faceInfo.pointSize) != FontEngineError.Success) return false;
                 if (!FontEngine.TryGetGlyphWithIndexValue(index, GlyphLoadFlags.LOAD_NO_BITMAP, out var glyph)) return false;
                 if (glyph.metrics.width > 0 && glyph.metrics.height > 0)
                 {
@@ -789,7 +844,7 @@ namespace BurstWord.BRG
             {
                 if (!nominalGlyphs.TryGetValue(unicode, out glyph))
                 {
-                    if (HarfBuzzNative.hb_font_get_nominal_glyph(NativeFont, unicode, out glyph) == 0) glyph = 0;
+                    if (!Session.TryGetGlyphIndex(unicode, out glyph)) glyph = 0;
                     nominalGlyphs[unicode] = glyph;
                 }
                 return glyph != 0;
@@ -803,7 +858,24 @@ namespace BurstWord.BRG
                 free = new List<GlyphRect> { new GlyphRect(0, 0, width - 1, height - 1) }; used = new List<GlyphRect>();
             }
             public Texture Texture(Glyph glyph) => glyphTextures.TryGetValue(glyph.index, out var texture) ? texture : font.atlasTextures[glyph.atlasIndex];
-            public void Dispose() { HarfBuzzNative.hb_font_destroy(NativeFont); foreach (var texture in textures) DestroyGeneratedObject(texture); }
+            public void Dispose() { Session.Dispose(); foreach (var texture in textures) DestroyGeneratedObject(texture); }
+        }
+
+        private void ValidateTmpMeasuredBoundaries()
+        {
+            foreach (var measuredRun in measuredRuns)
+            {
+                if (!enableKerning || measuredRun.glyphStart == measuredRun.glyphEnd || measuredGlyphs[measuredRun.glyphStart].face != null) continue;
+                for (int boundary = measuredRun.first + 1; boundary < measuredRun.last; boundary++)
+                {
+                    var left = tokens[boundary - 1]; var right = tokens[boundary];
+                    if (left.sprite != null || right.sprite != null || left.glyph.character == null || right.glyph.character == null ||
+                        !SameStyle(left.style, right.style) || !Pair(left.glyph.font, left.glyph.character.glyph.index, right.glyph.character.glyph.index, out var pair)) continue;
+                    var a = pair.firstAdjustmentRecord.glyphValueRecord; var b = pair.secondAdjustmentRecord.glyphValueRecord;
+                    if (a.xAdvance != 0 || a.xPlacement != 0 || a.yPlacement != 0 || b.xAdvance != 0 || b.xPlacement != 0 || b.yPlacement != 0)
+                        measuredBoundaries[boundary] = false;
+                }
+            }
         }
 
         private void DisposeTypography()
@@ -821,7 +893,7 @@ namespace BurstWord.BRG
             paragraphAnalyses.Clear();
             wrappedLines.Clear(); wrappedLineGlyphCount = 0;
             activePreparedMessage = null; activeParagraphAnalysis = null;
-            if (shapingBuffer != IntPtr.Zero) { HarfBuzzNative.hb_buffer_destroy(shapingBuffer); shapingBuffer = IntPtr.Zero; }
+            shapingOutput.Clear(); shapingFunctions = default;
             DestroyGeneratedObject(solidTexture);
             tokens.Clear(); shaped.Clear(); runs.Clear(); styleFrames.Clear();
             warnedSource = shapingUnavailable = false;

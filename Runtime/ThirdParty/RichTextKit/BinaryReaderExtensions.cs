@@ -1,4 +1,4 @@
-﻿// RichTextKit
+// RichTextKit
 // Copyright © 2019-2020 Topten Software. All Rights Reserved.
 // 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may 
@@ -18,7 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace Topten.RichTextKit
+namespace BurstWord.Internal.RichTextKit
 {
     static class BinaryReaderExtensions
     {

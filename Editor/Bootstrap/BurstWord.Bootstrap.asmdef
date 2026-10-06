@@ -1,0 +1,6 @@
+{
+  "name": "BurstWord.Bootstrap",
+  "includePlatforms": [
+    "Editor"
+  ]
+}

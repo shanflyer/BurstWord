@@ -89,7 +89,7 @@ namespace BurstWord.BRG
                 nextOverlay = elapsed + 0.5f;
                 overlay = $"Mode: {ModeNames[(int)workload]}   Rate: {emissionsPerSecond:N0}/s\n"+
                     $"Active text: {textRenderer.ActiveCount:N0}/{textRenderer.Capacity:N0}   Glyphs: {textRenderer.ActiveGlyphCount:N0}\n"+
-                    $"Backend: {textRenderer.ActiveBackend}   Draw commands: {textRenderer.DrawCommandCount}   Objects per text: 0\n"+
+                    $"Backend: {textRenderer.ActiveBackend}   Draw commands: {textRenderer.DrawCommandCount}   Objects per text: 0\nTypography: {textRenderer.ShaperName}\n"+
                     $"Emitted: {textRenderer.EmittedCount:N0}   Dropped: {textRenderer.DroppedCount:N0}   Layout failures: {textRenderer.FailedLayoutCount:N0}\n"+
                     $"Missing glyphs/sprites/shaping sources: {textRenderer.MissingGlyphCount}/{textRenderer.MissingSpriteCount}/{textRenderer.UnavailableShapingCount}";
 

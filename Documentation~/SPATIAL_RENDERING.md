@@ -14,7 +14,7 @@
 
 完整场景模式是普通 TMP 三维透明文字的排序能力：透明对象作为整体比较位置，仍服从场景透明队列设置。不是逐像素透明求解；两块相交的透明平面、不同 Render Queue 的人为优先级，以及另一个自定义 Renderer Feature 在更晚阶段画出的内容，都遵守 URP 本身的渲染规则。
 
-默认和不透明遮挡模式需要 `BrgTextRendererFeature`。Editor 脚本加载及进入 Play 前，会为 Graphics Settings / 当前 Quality Settings 指定的 URP 管线自动补齐通道，并把 Feature 作为 Renderer Data 的子资源保存，同时维护 URP 的恢复映射。无需手动安装。其他尚未启用的管线可用菜单 **Tools → BurstWord → Install BRG Rendering** 安装。完整场景模式直接走普通透明通道。当前实现面向 Unity 2022.3 + URP 14，未实现其他管线或 Instancing 回退。
+默认和不透明遮挡模式需要 `BrgTextRendererFeature`。Editor 脚本加载及进入 Play 前，会为 Graphics Settings / 当前 Quality Settings 指定的 URP 管线自动补齐通道，并把 Feature 作为 Renderer Data 的子资源保存，同时维护 URP 的恢复映射。无需手动安装。其他尚未启用的管线可用菜单 **Tools → BurstWord → Install BRG Rendering** 安装。完整场景模式直接走普通透明通道。当前实现适配 Unity 2022.3 及后续 Unity 6 的 URP；Unity 6 提供 Render Graph 路径。不兼容 BRG 的设备自动退回底层 Instancing Draw，依然不创建每条文字对象。Built-in RP 和 HDRP 尚未实现。
 
 ## 三种空间模式
 

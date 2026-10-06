@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Topten.RichTextKit.Utils;
+using BurstWord.Internal.RichTextKit.Utils;
 
-namespace Topten.RichTextKit
+namespace BurstWord.Internal.RichTextKit
 {
     static class GraphemeClusterAlgorithm
     {

@@ -1,6 +1,6 @@
 # BurstWord
 
-GPU-animated damage text for Unity 2022.3 and URP 14, rendered with BatchRendererGroup using TextMeshPro font resources, with an automatic GPU instancing fallback. Each message is data; no GameObject, TMP component or mesh is created per message. Glyphs share one generated quad.
+GPU-animated damage text for Unity 2022.3 and newer, including Unity 6, with URP, rendered with BatchRendererGroup using TextMeshPro font resources, with an automatic GPU instancing fallback. Each message is data; no GameObject, TMP component or mesh is created per message. Glyphs share one generated quad.
 
 ## Install
 
@@ -10,7 +10,7 @@ In **Window → Package Manager → + → Add package from git URL**, enter:
 https://github.com/shanflyer/BurstWord.git
 ```
 
-Use a URP project. Unity installs the declared TMP, Burst and URP dependencies. Import **Window → TextMeshPro → Import TMP Essential Resources** if your project does not have them yet. BurstWord configures the active URP renderer and preserves both rendering shaders and their instancing variants automatically; **Tools → BurstWord → Install BRG Rendering** reapplies that configuration when you change renderer assets.
+Use a URP project. Unity resolves the URP, Burst and uGUI dependencies for your editor version. On Unity 2022.3 / 2023.1, BurstWord installs the separate TMP package automatically if it is missing. Newer Unity uses TMP from uGUI, without installing a conflicting legacy TMP package. Import **Window → TextMeshPro → Import TMP Essential Resources** if your project does not have them yet. BurstWord configures the active URP renderer and preserves both rendering shaders and their instancing variants automatically; **Tools → BurstWord → Install BRG Rendering** reapplies that configuration when you change renderer assets.
 
 ## Use
 
@@ -25,11 +25,23 @@ renderer.Emit(hitPosition, 1234, Color.white);
 renderer.EmitText(hitPosition, "<b>Critical 1234</b>", Color.yellow);
 ```
 
-The manager provides whole-message sorting, three occlusion modes, fixed-size camera-facing text, transform following, world-space perspective and sampled GPU animation. It supports TMP font fallbacks, material effects, sprites, rich text, Unicode bidirectional text, shaping and wrapping. Assign fonts that contain the required glyphs. When adding your own fonts, run **Tools → BurstWord → Prepare Font Sources**; the generated shaping data belongs to your project under `Assets/BurstWord/Resources`, not to the installed package.
+The manager provides whole-message sorting, three occlusion modes, fixed-size camera-facing text, transform following, world-space perspective and sampled GPU animation. The default typography uses TMP font/glyph resources, font fallbacks, pair adjustments, material effects, sprites, supported rich-text tags, Unicode bidirectional ordering and wrapping. It creates no TMP text component. Assign fonts containing your required glyphs. OpenType complex-script shaping is optional: the core package contains no external native font library and does not select a third-party provider for you.
 
 `Render Backend` defaults to **Auto**: it uses BRG on compatible D3D11/D3D12, Vulkan and Metal devices, and falls back to ordinary instanced draws when that BRG path is unavailable. WebGL 2 and OpenGL/OpenGL ES use the fallback. Choose **Instancing** to test it directly. Both backends keep the same typography, whole-message ordering, space modes and GPU animation; the fallback never creates text objects. The benchmark panel shows the active backend and lets you switch it.
 
-HarfBuzz 8.3.1 is supplied for Windows (x86/x64/ARM64), macOS (Intel/Apple Silicon), Linux x64 and Android (ARMv7/ARM64/x86/x64). Android libraries use 16 KB-compatible load alignment. iOS, tvOS, visionOS and WebGL compile the included HarfBuzz source with their target toolchain, using `__Internal` linkage; no separate font-library download is needed. The Unity version must itself support your selected target/architecture. Rendering requires URP and GPU instancing (WebGL 2 in browsers). See [platform integration and validation](Documentation~/PLATFORMS.md) for the exact coverage and test limits.
+## Optional shaping
+
+Leave **Typography → Text Shaper** empty for standard TMP glyph-data layout. Complex scripts that need joining, contextual substitutions or mark positioning require a shaping provider; a font containing those glyphs alone does not perform shaping.
+
+To use the supplied optional HarfBuzz adapter, install the core first, then add this second Git URL:
+
+```text
+https://github.com/shanflyer/BurstWord.git?path=/Adapters~/HarfBuzz#v0.3.0
+```
+
+Assign the ready-made `HarfBuzz` asset from that package to **Text Shaper** on the manager. Installation alone does not activate it. The adapter prepares original font data before Play/build and supplies target-filtered native libraries or source integration. The core package needs none of those native files. Other plugins can implement the public `ITextShaper` interface, with optional Job acceleration; see [shaping adapters](Documentation~/SHAPING.md).
+
+Use URP's normal Render Graph mode on Unity 6. Unity 2022.3 uses the classic render-pass implementation. See [version/platform support and verification limits](Documentation~/PLATFORMS.md).
 
 ## Examples and benchmarks
 

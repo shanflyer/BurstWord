@@ -472,7 +472,7 @@ namespace BurstWord.BRG
                 foreach (var page in glyphPages) page.Material.SetFloat("_BurstPlainSdfFastPath", usePlainSdfFastPath ? 1 : 0);
                 appliedPlainSdfFastPath = usePlainSdfFastPath;
             }
-            if (worldCamera != null) cameraId = worldCamera.GetInstanceID();
+            if (worldCamera != null) cameraId = BrgObjectIdentity.Of(worldCamera);
             if (labelFrame != Time.frameCount) { UploadedTransformBytesLastFrame = TransformUploadCallsLastFrame = 0; labelFrame = Time.frameCount; }
             if (appliedSortingMode != sortingMode)
             {
@@ -677,7 +677,7 @@ namespace BurstWord.BRG
             using (CullMarker.Auto())
             {
                 var commands = (BatchCullingOutputDrawCommands*)output.drawCommands.GetUnsafePtr(); *commands = default;
-                if (context.viewType != BatchCullingViewType.Camera || context.viewID.GetInstanceID() != cameraId) return default;
+                if (context.viewType != BatchCullingViewType.Camera || BrgObjectIdentity.Of(context.viewID) != cameraId) return default;
                 if (ActiveGlyphCount == 0) { DrawCommandCount = SubmittedGlyphCount = SortedLabelCount = 0; return default; }
                 using (SortMarker.Auto()) SortLabels();
                 using var visibleScope = VisibleMarker.Auto();

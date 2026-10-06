@@ -3,13 +3,23 @@ using System.IO;
 using BurstWord.BRG;
 using TMPro;
 using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
 using UnityEngine;
 
-namespace BurstWord.Baseline.Editor
+namespace BurstWord.Adapters.HarfBuzz.Editor
 {
-    public static class BrgTypographySetup
+    [InitializeOnLoad]
+    public sealed class BrgTypographySetup : IPreprocessBuildWithReport
     {
-        [MenuItem("Tools/BurstWord/Prepare Font Sources")]
+        public int callbackOrder => -100;
+        static BrgTypographySetup()
+        {
+            EditorApplication.playModeStateChanged += state =>
+            { if (state == PlayModeStateChange.ExitingEditMode) PrepareFontSources(); };
+        }
+        public void OnPreprocessBuild(BuildReport report) => PrepareFontSources();
+        [MenuItem("Tools/BurstWord/HarfBuzz/Prepare Font Sources")]
         public static void PrepareFontSources()
         {
             Directory.CreateDirectory("Assets/BurstWord/Resources/BurstWordOpenType");

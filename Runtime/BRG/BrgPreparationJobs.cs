@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Unity.Burst;
+using BurstWord.Typography;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
@@ -57,11 +58,17 @@ namespace BurstWord.BRG
             public static PreparedGlyph From(PositionedGlyph glyph) => new PreparedGlyph
             { group = glyph.glyph.group, rect = glyph.rect, uv = glyph.uv, style = glyph.style, tint = glyph.tint };
         }
+        private struct TmpPreparationMetric
+        {
+            public float advance, scale, spacing;
+            public int before, after, choices, nextChoices;
+        }
+        private struct TmpPreparationPair { public Vector3 first, second; }
         private struct PreparationSignature { public uint glyph, flags; public int cluster; public float advance, x, y; }
         private struct PreparationRun
         {
             public IntPtr font;
-            public int first, last, glyphStart, glyphCount, direction;
+            public int first, last, glyphStart, glyphCount, direction, tmp;
             public uint script;
             public float scale, spacing;
         }
@@ -72,6 +79,8 @@ namespace BurstWord.BRG
             public PreparedGlyph* replacements;
             public PreparationRun* runs;
             public PreparationSignature* signature;
+            public TmpPreparationMetric* tmpMetrics;
+            public TmpPreparationPair* tmpPairs;
             public PreparationPatch* patches;
             public uint* nominal;
             public PreparationTemplateData* alternatives;
@@ -90,6 +99,8 @@ namespace BurstWord.BRG
             public NativeArray<PreparedGlyph> glyphs, replacements;
             public NativeArray<PreparationRun> runs;
             public NativeArray<PreparationSignature> signature;
+            public NativeArray<TmpPreparationMetric> tmpMetrics;
+            public NativeArray<TmpPreparationPair> tmpPairs;
             public NativeArray<PreparationPatch> patches;
             public NativeArray<uint> nominal;
             public NativeArray<PreparationTemplateData> alternatives;
@@ -99,13 +110,14 @@ namespace BurstWord.BRG
                 glyphs = (PreparedGlyph*)glyphs.GetUnsafeReadOnlyPtr(), replacements = (PreparedGlyph*)replacements.GetUnsafeReadOnlyPtr(),
                 runs = (PreparationRun*)runs.GetUnsafeReadOnlyPtr(), signature = (PreparationSignature*)signature.GetUnsafeReadOnlyPtr(),
                 patches = (PreparationPatch*)patches.GetUnsafeReadOnlyPtr(), nominal = (uint*)nominal.GetUnsafeReadOnlyPtr(),
+                tmpMetrics = (TmpPreparationMetric*)tmpMetrics.GetUnsafeReadOnlyPtr(), tmpPairs = (TmpPreparationPair*)tmpPairs.GetUnsafeReadOnlyPtr(),
                 glyphCount = glyphs.Length, runCount = runs.Length, patchCount = patches.Length, pointCount = source.Length, signatureCount = signature.Length,
                 alternatives = alternatives.IsCreated ? (PreparationTemplateData*)alternatives.GetUnsafeReadOnlyPtr() : null,
                 alternativeCount = alternativeTemplates.Count + 1
             };
             public void Dispose()
             {
-                glyphs.Dispose(); replacements.Dispose(); runs.Dispose(); signature.Dispose(); patches.Dispose(); nominal.Dispose();
+                glyphs.Dispose(); replacements.Dispose(); runs.Dispose(); signature.Dispose(); patches.Dispose(); nominal.Dispose(); tmpMetrics.Dispose(); tmpPairs.Dispose();
                 if (alternatives.IsCreated) alternatives.Dispose();
                 foreach (var item in alternativeTemplates) item.Dispose();
             }
@@ -131,7 +143,7 @@ namespace BurstWord.BRG
         private readonly List<PreparationTemplate> retiredPreparations = new List<PreparationTemplate>();
         private int preparationVariantCount;
         private const int MaxPreparationAlternatives = 8;
-        private int PreparationFlags => (enableShaping && !shapingUnavailable ? 1 : 0) | (enableKerning ? 2 : 0) |
+        private int PreparationFlags => (ShapingEnabled ? 1 : 0) | (enableKerning ? 2 : 0) |
             (enableLigatures ? 4 : 0) | (tightGlyphBounds ? 8 : 0);
         private void TouchPreparation(PreparationTemplate template)
         { preparationLru.Remove(template.cacheNode); preparationLru.AddLast(template.cacheNode); }
@@ -292,7 +304,7 @@ namespace BurstWord.BRG
                         if (!preparationBuffers.IsCreated) preparationBuffers = new NativeArray<IntPtr>(JobsUtility.ThreadIndexCount, Allocator.Persistent);
                         EnsureNumericJobStorage(); EnsurePreparationCapacity(ref preparationMeasurements,Math.Max(1,measured));
                         var handle = new PrepareTemplatesJob { requests = preparationRequests, results = preparationResults,
-                            points = preparationPoints, output = preparationOutput, measurements = preparationMeasurements, buffers = preparationBuffers,
+                            points = preparationPoints, output = preparationOutput, measurements = preparationMeasurements, buffers = preparationBuffers, shaping = shapingFunctions,
                             numericGlyphs=numericJobGlyphs, numericFirstPairs=numericJobFirstPairs, numericSecondPairs=numericJobSecondPairs,
                             numericKerning=enableKerning, numericSize=fontSize }.Schedule(count, 16);
                         long began = collectLayoutTimings ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
@@ -414,6 +426,7 @@ namespace BurstWord.BRG
             for (int i = 0; i < template.plan.signature.Length; i++)
             {
                 var item = template.plan.signature[i]; var actual = preparationMeasurements[reusedBatchMeasurementOffset + i];
+                if (item.face == null) item.resolved = tokens[item.cluster].glyph;
                 item.glyph = actual.glyph; item.flags = actual.flags; item.advance = actual.advance; item.x = actual.x; item.y = actual.y;
                 advances[item.cluster] += item.advance; measuredGlyphs.Add(item);
             }
@@ -428,6 +441,7 @@ namespace BurstWord.BRG
                     else if (i == run.glyphStart || measuredGlyphs[i - 1].cluster != item.cluster) measuredBoundaries[item.cluster] = (item.flags & 1u) == 0;
                     else if ((item.flags & 1u) != 0) measuredBoundaries[item.cluster] = false;
                 }
+            ValidateTmpMeasuredBoundaries();
             for (int i = 1; i < measuredRuns.Count; i++)
             { int boundary = measuredRuns[i].first; if (codePoints[boundary - 1] != ' ' && codePoints[boundary] != ' ') measuredBoundaries[boundary] = false; }
             measuredBoundaries[0] = measuredBoundaries[end] = true;
@@ -471,6 +485,8 @@ namespace BurstWord.BRG
             // used by the native shaping cache. Dynamic/contextual runs are re-shaped in the job.
             var jobRuns = new List<PreparationRun>();
             var nominal = new uint[tokens.Count * 10];
+            var tmpMetrics = new TmpPreparationMetric[tokens.Count * 10];
+            var tmpPairs = new List<TmpPreparationPair>();
             foreach (var run in plan.runs)
             {
                 if (run.glyphStart == run.glyphEnd) continue;
@@ -479,11 +495,23 @@ namespace BurstWord.BRG
                 if (!dynamic && isolated) continue;
                 var token = tokens[run.first];
                 var face = plan.signature[run.glyphStart].face;
-                if (face == null) { if (dynamic) return; else continue; }
-                jobRuns.Add(new PreparationRun { font = face.NativeFont, first = run.first, last = run.last,
+                if (face == null)
+                {
+                    if (!dynamic) continue;
+                    if (!BuildTmpPreparationRun(run, tmpMetrics, tmpPairs, nominal)) return;
+                    jobRuns.Add(new PreparationRun { first = run.first, last = run.last,
+                        glyphStart = run.glyphStart, glyphCount = run.glyphEnd - run.glyphStart, tmp = 1 });
+                    continue;
+                }
+                if (!(face.Session is IJobTextShapingFont jobFont) || !jobFont.JobFunctions.IsCreated) return;
+                var functions = jobFont.JobFunctions;
+                if (shapingFunctions.IsCreated && (shapingFunctions.Shape.Value != functions.Shape.Value ||
+                    shapingFunctions.Release.Value != functions.Release.Value)) return;
+                shapingFunctions = functions;
+                jobRuns.Add(new PreparationRun { font = jobFont.JobHandle, first = run.first, last = run.last,
                     glyphStart = run.glyphStart, glyphCount = run.glyphEnd - run.glyphStart,
                     direction = (run.level & 1) != 0 ? 5 : 4, script = scripts[run.first],
-                    scale = token.style.size / token.style.font.faceInfo.pointSize * token.style.font.faceInfo.scale / 64f,
+                    scale = token.style.size / token.style.font.faceInfo.pointSize * token.style.font.faceInfo.scale,
                     spacing = token.style.spacing });
                 for (int i = run.first; i < run.last; i++)
                     if (codePoints[i] >= '0' && codePoints[i] <= '9')
@@ -497,12 +525,20 @@ namespace BurstWord.BRG
                 for (int i = 0; i < patches.Length; i++)
                 {
                     var patch = plan.patches[i]; var signature = plan.signature[patch.measuredIndex];
-                    if (signature.face == null) return;
+
                     patches[i] = new PreparationPatch { point = signature.cluster, first = patch.first, count = patch.count, replacements = replacements.Count };
                     for (uint digit = 0; digit < 10; digit++)
                     {
                         uint glyph = nominal[signature.cluster * 10 + digit];
-                        if (glyph == 0 || !signature.face.Resolve(glyph, out var resolved)) return;
+                        ResolvedGlyph resolved;
+                        if (signature.face != null)
+                        { if (glyph == 0 || !signature.face.Resolve(glyph, out resolved)) return; }
+                        else
+                        {
+                            var choice = TmpPreparationChoice(signature.cluster, (int)digit);
+                            if (choice.character == null) return;
+                            resolved = choice;
+                        }
                         AddPlacedCore(new Shaped { tokenIndex = patch.tokenIndex, glyph = resolved, advance = signature.advance,
                             x = signature.x, y = signature.y }, patch.x, patch.y);
                         if (layout.Count - originalCount != patch.count) return;
@@ -520,6 +556,7 @@ namespace BurstWord.BRG
                     source = tokens.ToArray(), digits = activePreparedMessage.digitTokens,
                     glyphs = new NativeArray<PreparedGlyph>(glyphs, Allocator.Persistent), replacements = new NativeArray<PreparedGlyph>(replacements.ToArray(), Allocator.Persistent),
                     runs = new NativeArray<PreparationRun>(jobRuns.ToArray(), Allocator.Persistent), signature = new NativeArray<PreparationSignature>(signatureData, Allocator.Persistent),
+                    tmpMetrics = new NativeArray<TmpPreparationMetric>(tmpMetrics, Allocator.Persistent), tmpPairs = new NativeArray<TmpPreparationPair>(tmpPairs.ToArray(), Allocator.Persistent),
                     patches = new NativeArray<PreparationPatch>(patches, Allocator.Persistent), nominal = new NativeArray<uint>(nominal, Allocator.Persistent) };
                 if (existing == null)
                 {
@@ -539,6 +576,63 @@ namespace BurstWord.BRG
                 }
             }
             finally { if (layout.Count > originalCount) layout.RemoveRange(originalCount, layout.Count - originalCount); }
+        }
+
+        private int TmpPreparationChoiceCount(int point) => codePoints[point] >= '0' && codePoints[point] <= '9' ? 10 : 1;
+        private ResolvedGlyph TmpPreparationChoice(int point, int digit)
+        {
+            if (TmpPreparationChoiceCount(point) == 1) return tokens[point].glyph;
+            for (int slot = 0; slot < activePreparedMessage.digitTokens.Length; slot++)
+                if (activePreparedMessage.digitTokens[slot] == point && activePreparedMessage.digitChoices != null)
+                    return activePreparedMessage.digitChoices[slot][digit].glyph;
+            return default;
+        }
+        // Copy TMP metrics into immutable job data once. No TMP object/API is accessed by a worker.
+        private bool BuildTmpPreparationRun(MeasuredRun run, TmpPreparationMetric[] metrics,
+            List<TmpPreparationPair> pairs, uint[] nominal)
+        {
+            var boundaries = new int[run.last - run.first];
+            for (int i = run.first; i < run.last; i++)
+            {
+                boundaries[i - run.first] = pairs.Count;
+                if (i + 1 == run.last) continue;
+                int leftCount = TmpPreparationChoiceCount(i), rightCount = TmpPreparationChoiceCount(i + 1);
+                for (int left = 0; left < leftCount; left++) for (int right = 0; right < rightCount; right++)
+                {
+                    var a = TmpPreparationChoice(i, left); var b = TmpPreparationChoice(i + 1, right);
+                    TmpPreparationPair item = default;
+                    if (enableKerning && tokens[i].sprite == null && tokens[i + 1].sprite == null &&
+                        SameStyle(tokens[i].style, tokens[i + 1].style) && a.character != null && b.character != null &&
+                        Pair(a.font, a.character.glyph.index, b.character.glyph.index, out var record))
+                    {
+                        var first = record.firstAdjustmentRecord.glyphValueRecord;
+                        var second = record.secondAdjustmentRecord.glyphValueRecord;
+                        item.first = new Vector3(first.xPlacement, first.yPlacement, first.xAdvance);
+                        item.second = new Vector3(second.xPlacement, second.yPlacement, second.xAdvance);
+                    }
+                    pairs.Add(item);
+                }
+            }
+            for (int i = run.first; i < run.last; i++)
+            {
+                var token = tokens[i]; int count = TmpPreparationChoiceCount(i);
+                for (int digit = 0; digit < count; digit++)
+                {
+                    var choice = TmpPreparationChoice(i, digit);
+                    if (token.sprite == null && !IsControl(token.unicode) && choice.character == null) return false;
+                    if (count == 10 && (!ReferenceEquals(choice.font, token.style.font) || choice.alternative != token.alternative)) return false;
+                    float scale = token.sprite != null ? SpriteScale(token) : choice.character != null ? GlyphScale(token, choice) : 0;
+                    float advance = token.sprite != null ? token.spriteCharacter.glyph.metrics.horizontalAdvance * scale :
+                        choice.character != null ? choice.character.glyph.metrics.horizontalAdvance * scale : 0;
+                    if (token.unicode == '\t') advance *= 4;
+                    metrics[i * 10 + digit] = new TmpPreparationMetric { advance = advance, scale = scale, spacing = token.style.spacing,
+                        before = i > run.first ? boundaries[i - run.first - 1] : -1,
+                        after = i + 1 < run.last ? boundaries[i - run.first] : -1,
+                        choices = count, nextChoices = i + 1 < run.last ? TmpPreparationChoiceCount(i + 1) : 1 };
+                    nominal[i * 10 + digit] = choice.character != null ? choice.character.glyph.index : 0;
+                }
+            }
+            return true;
         }
 
         private bool CanAddPreparationAlternative(PreparationTemplate existing, IList<MeasuredGlyph> signature, IList<MeasuredRun> runs, int glyphCount)
@@ -579,6 +673,7 @@ namespace BurstWord.BRG
             [NativeSetThreadIndex] private int threadIndex;
             [ReadOnly] public NativeArray<NumericPreparedGlyph> numericGlyphs;
             [ReadOnly] public NativeArray<Vector3> numericFirstPairs, numericSecondPairs;
+            public TextShapingFunctions shaping;
             public bool numericKerning;
             public int numericSize;
             public void Execute(int index)
@@ -594,35 +689,52 @@ namespace BurstWord.BRG
                 // Static runs keep their exact signature; contextual runs overwrite it below.
                 UnsafeUtility.MemCpy(measured, template.signature, (long)template.signatureCount * UnsafeUtility.SizeOf<PreparationSignature>());
                 IntPtr buffer = buffers[threadIndex];
-                if (template.runCount > 0 && buffer == IntPtr.Zero) { buffer = HarfBuzzNative.hb_buffer_create(); buffers[threadIndex] = buffer; }
-                var features = stackalloc HarfBuzzNative.Feature[3];
-                features[0] = new HarfBuzzNative.Feature { tag = 0x6b65726e, value = (uint)((template.features & 2) != 0 ? 1 : 0), end = uint.MaxValue };
-                features[1] = new HarfBuzzNative.Feature { tag = 0x6c696761, value = (uint)((template.features & 4) != 0 ? 1 : 0), end = uint.MaxValue };
-                features[2] = new HarfBuzzNative.Feature { tag = 0x636c6967, value = features[1].value, end = uint.MaxValue };
                 for (int r = 0; r < template.runCount; r++)
                 {
                     var run = template.runs[r];
-                    HarfBuzzNative.hb_buffer_clear_contents(buffer);
-                    HarfBuzzNative.hb_buffer_add_utf32(buffer, text, template.pointCount, (uint)run.first, run.last - run.first);
-                    HarfBuzzNative.hb_buffer_set_direction(buffer, run.direction);
-                    HarfBuzzNative.hb_buffer_set_script(buffer, run.script);
-                    HarfBuzzNative.hb_buffer_guess_segment_properties(buffer);
-                    HarfBuzzNative.hb_shape(run.font, buffer, features, 3); calls++;
-                    var infos = HarfBuzzNative.hb_buffer_get_glyph_infos(buffer, out uint count);
-                    var positions = HarfBuzzNative.hb_buffer_get_glyph_positions(buffer, out _);
+                    if (run.tmp != 0)
+                    {
+                        for (int i = 0; i < run.glyphCount; i++)
+                        {
+                            int at = run.glyphStart + i; var item = measured[at]; int point = item.cluster;
+                            int digit = text[point] >= '0' && text[point] <= '9' ? (int)text[point] - '0' : 0;
+                            var metric = template.tmpMetrics[point * 10 + digit];
+                            float advance = metric.advance, x = 0, y = 0;
+                            if (metric.before >= 0)
+                            {
+                                int previous = text[point - 1] >= '0' && text[point - 1] <= '9' ? (int)text[point - 1] - '0' : 0;
+                                var value = template.tmpPairs[metric.before + previous * metric.choices + digit].second;
+                                x += value.x * metric.scale; y += value.y * metric.scale; advance += value.z * metric.scale;
+                            }
+                            if (metric.after >= 0)
+                            {
+                                int next = text[point + 1] >= '0' && text[point + 1] <= '9' ? (int)text[point + 1] - '0' : 0;
+                                var value = template.tmpPairs[metric.after + digit * metric.nextChoices + next].first;
+                                x += value.x * metric.scale; y += value.y * metric.scale; advance += value.z * metric.scale;
+                            }
+                            item.advance = advance + metric.spacing; item.x = x; item.y = y; measured[at] = item;
+                        }
+                        continue;
+                    }
+                    TextShapingJobResult shapedResult = default;
+                    shaping.Shape.Invoke(run.font, ref buffer, text, template.pointCount, run.first, run.last - run.first,
+                        run.script, (template.features & 6) | (run.direction == 5 ? 1 : 0), ref shapedResult);
+                    buffers[threadIndex] = buffer; calls++;
+                    int count = shapedResult.Count;
+                    var glyphs = shapedResult.Glyphs;
                     if (count != run.glyphCount) { results[index] = new PreparationResult { nativeCalls = calls }; return; }
                     for (int i = 0; i < count; i++)
                     {
                         var original = template.signature[run.glyphStart + i];
-                        int cluster = (int)infos[i].cluster;
+                        int cluster = (int)glyphs[i].Cluster;
                         if (cluster != original.cluster) { results[index] = new PreparationResult { nativeCalls = calls }; return; }
                         uint point = text[cluster];
                         uint expected = point >= '0' && point <= '9' ? template.nominal[cluster * 10 + point - '0'] : original.glyph;
-                        float advance = positions[i].xAdvance * run.scale;
-                        if (i + 1 == count || infos[i + 1].cluster != infos[i].cluster) advance += run.spacing;
-                        compatible &= infos[i].glyph == expected;
-                        float x = positions[i].xOffset * run.scale, y = positions[i].yOffset * run.scale;
-                        original.glyph = infos[i].glyph; original.flags = infos[i].mask & 7u; original.advance = advance; original.x = x; original.y = y;
+                        float advance = glyphs[i].Advance * run.scale;
+                        if (i + 1 == count || glyphs[i + 1].Cluster != glyphs[i].Cluster) advance += run.spacing;
+                        compatible &= glyphs[i].GlyphId == expected;
+                        float x = glyphs[i].OffsetX * run.scale, y = glyphs[i].OffsetY * run.scale;
+                        original.glyph = glyphs[i].GlyphId; original.flags = glyphs[i].Flags; original.advance = advance; original.x = x; original.y = y;
                         measured[run.glyphStart + i] = original;
                     }
                 }
@@ -685,7 +797,7 @@ namespace BurstWord.BRG
         {
             InvalidatePreparationTemplates(); DisposeRetiredPreparations();
             if (preparationBuffers.IsCreated)
-            { foreach (var buffer in preparationBuffers) if (buffer != IntPtr.Zero) HarfBuzzNative.hb_buffer_destroy(buffer); preparationBuffers.Dispose(); }
+            { foreach (var buffer in preparationBuffers) if (buffer != IntPtr.Zero && shapingFunctions.IsCreated) shapingFunctions.Release.Invoke(buffer); preparationBuffers.Dispose(); }
             if (preparationRequests.IsCreated) preparationRequests.Dispose(); if (preparationResults.IsCreated) preparationResults.Dispose();
             if (preparationPoints.IsCreated) preparationPoints.Dispose(); if (preparationOutput.IsCreated) preparationOutput.Dispose();
             if (preparationMeasurements.IsCreated) preparationMeasurements.Dispose();

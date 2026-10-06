@@ -19,7 +19,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Topten.RichTextKit
+namespace BurstWord.Internal.RichTextKit
 {
     /// <summary>
     /// Unicode paired bracket types

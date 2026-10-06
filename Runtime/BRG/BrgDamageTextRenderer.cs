@@ -92,7 +92,7 @@ namespace BurstWord.BRG
         private Mesh quad;
         private BatchMeshID meshId;
         private double epoch;
-        private int cameraId;
+        private long cameraId;
         private bool warnedMissing;
         private static readonly ProfilerMarker GenerateMarker = new ProfilerMarker("BurstWord.BRG.GenerateTMPGlyphs");
         private static readonly ProfilerMarker UploadMarker = new ProfilerMarker("BurstWord.BRG.Upload");
@@ -149,7 +149,7 @@ namespace BurstWord.BRG
             visibleLabels = new NativeArray<VisibleLabel>(capacity, Allocator.Persistent);
             freeLinks = new int[links.Length];
             epoch = Time.unscaledTimeAsDouble;
-            cameraId = worldCamera.GetInstanceID();
+            cameraId = BrgObjectIdentity.Of(worldCamera);
             quad = new Mesh { name = "BurstWord shared generated glyph quad", hideFlags = HideFlags.HideAndDontSave };
             quad.vertices = new[] { new Vector3(0, 0, 0), new Vector3(0, 1, 0), new Vector3(1, 1, 0), new Vector3(1, 0, 0) };
             quad.uv = new[] { Vector2.zero, Vector2.up, Vector2.one, Vector2.right };

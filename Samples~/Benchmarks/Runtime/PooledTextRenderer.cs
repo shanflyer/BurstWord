@@ -66,7 +66,11 @@ namespace BurstWord.Baseline
                 text.font = font;
                 text.fontSize = fontSize;
                 text.alignment = TextAlignmentOptions.Center;
+#if BURSTWORD_UGUI_TMP
+                text.textWrappingMode = TextWrappingModes.NoWrap;
+#else
                 text.enableWordWrapping = false;
+#endif
                 text.overflowMode = TextOverflowModes.Overflow;
                 text.raycastTarget = false;
                 text.richText = false;

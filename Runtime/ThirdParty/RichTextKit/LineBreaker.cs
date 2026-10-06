@@ -16,9 +16,9 @@
 // Ported from: https://github.com/foliojs/linebreak
 
 using System.Collections.Generic;
-using Topten.RichTextKit.Utils;
+using BurstWord.Internal.RichTextKit.Utils;
 
-namespace Topten.RichTextKit
+namespace BurstWord.Internal.RichTextKit
 {
     /// <summary>
     /// Implementation of the Unicode Line Break Algorithm

@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.iOS.Xcode;
 
-namespace BurstWord.Baseline.Editor
+namespace BurstWord.Adapters.HarfBuzz.Editor
 {
             // Compile the same OpenType shapers for device and simulator with Xcode's target
     // architecture. No external download, framework variant or user setup is needed.
@@ -14,7 +14,7 @@ namespace BurstWord.Baseline.Editor
         private static void IncludeHarfBuzz(BuildTarget target, string output)
         {
             if (target != BuildTarget.iOS && target != BuildTarget.tvOS && target.ToString() != "VisionOS") return;
-            var package = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.shanflyer.burstword/package.json");
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.shanflyer.burstword.harfbuzz/package.json");
             string source = Path.Combine(package.resolvedPath, "Runtime/Plugins/HarfBuzzSource~");
             string relative = "Libraries/BurstWordHarfBuzz";
             string destination = Path.Combine(output, relative);

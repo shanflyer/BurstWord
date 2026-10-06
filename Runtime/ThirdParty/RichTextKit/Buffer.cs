@@ -19,7 +19,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace Topten.RichTextKit.Utils
+namespace BurstWord.Internal.RichTextKit.Utils
 {
     /// <summary>
     /// A growable array of elements of type `T`

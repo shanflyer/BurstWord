@@ -1,0 +1,26 @@
+{
+  "name": "BurstWord.HarfBuzz.Editor",
+  "references": [
+    "BurstWord.Runtime",
+    "BurstWord.HarfBuzz",
+    "Unity.TextMeshPro"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.textmeshpro",
+      "expression": "3.0.0",
+      "define": "BURSTWORD_TMP"
+    },
+    {
+      "name": "com.unity.ugui",
+      "expression": "2.0.0",
+      "define": "BURSTWORD_UGUI_TMP"
+    }
+  ],
+  "defineConstraints": [
+    "BURSTWORD_TMP || BURSTWORD_UGUI_TMP"
+  ]
+}

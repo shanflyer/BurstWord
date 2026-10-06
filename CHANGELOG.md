@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Remove mandatory HarfBuzz/native integration from the core. Use standard TMP glyph data by default and expose explicit optional shaping factories/assets.
+- Move the supplied HarfBuzz integration into its own opt-in UPM package, preserving original native targets, licenses, cached shaping and Burst worker acceleration.
+- Preserve default TMP wrapping preparation in jobs through compiled glyph/pair data; managed adapters can use the main layout path without implementing native callbacks.
+- Select separate legacy TMP only where required, avoid Unity 6 integrated TMP/uGUI conflicts, and isolate embedded RichTextKit namespaces.
+- Add URP Render Graph overlay drawing and version-specific TextCore, render-pass and EntityId compatibility through installed Unity 6000.6.
+- Document provider contracts, activation, version checks and platform/device validation limits.
+
 ## 0.2.0
 
 - Prefer BRG automatically and fall back to ordinary GPU instanced draws on incompatible devices; the fallback creates no per-label objects or storage buffers.

@@ -89,7 +89,7 @@ namespace BurstWord.BRG
         }
         private bool TryMeasuredLine(int start, int end)
         {
-            // HarfBuzz UNSAFE_TO_BREAK is produced by default. Safe boundaries preserve
+            // Shaper unsafe-boundary flags identify safe splits that preserve
             // exactly the glyphs/positions of shaping the two pieces independently.
             if (!useMeasuredLayout || start < measuredStart || end > measuredEnd || !measuredBoundaries[start] || !measuredBoundaries[end])
             { MeasuredLineFallbacks++; return false; }
@@ -143,7 +143,7 @@ namespace BurstWord.BRG
         private int measuredPlanGlyphCount;
         private bool captureMeasuredPlan, measuredPlanEligible;
         private (ParsedMessage, ParagraphAnalysis, float, int) MeasuredPlanKey() => (activePreparedMessage, activeParagraphAnalysis, wrapWidth,
-            (enableShaping && !shapingUnavailable ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0));
+            (ShapingEnabled ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0));
 
         private bool TryCompleteMeasuredLayout()
         {

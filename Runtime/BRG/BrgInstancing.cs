@@ -71,7 +71,44 @@ namespace BurstWord.BRG
                     renderer.IsInitialized && !renderer.UsingBrg && renderer.sortingMode != SortingMode.SceneTransparent)
                     renderer.DrawInstanced(command);
         }
-        private void DrawInstanced(CommandBuffer command)
+#if BURSTWORD_URP_RENDER_GRAPH
+        internal static void DrawInstancingOverlays(Camera camera, RasterCommandBuffer command)
+        {
+            foreach (var renderer in spatialRenderers)
+                if (renderer != null && renderer.isActiveAndEnabled && renderer.worldCamera == camera &&
+                    renderer.IsInitialized && !renderer.UsingBrg && renderer.sortingMode != SortingMode.SceneTransparent)
+                    renderer.DrawInstanced(new InstancingCommand(command));
+        }
+#endif
+        private readonly struct InstancingCommand
+        {
+            private readonly CommandBuffer legacy;
+#if BURSTWORD_URP_RENDER_GRAPH
+            private readonly RasterCommandBuffer graph;
+            public InstancingCommand(RasterCommandBuffer command) { legacy = null; graph = command; }
+#endif
+            public InstancingCommand(CommandBuffer command)
+            {
+                legacy = command;
+#if BURSTWORD_URP_RENDER_GRAPH
+                graph = null;
+#endif
+            }
+            public bool IsOverlay => legacy != null
+#if BURSTWORD_URP_RENDER_GRAPH
+                || graph != null
+#endif
+                ;
+            public void Draw(Mesh mesh, Material material, Matrix4x4[] matrices, int count, MaterialPropertyBlock properties)
+            {
+#if BURSTWORD_URP_RENDER_GRAPH
+                if (graph != null) { graph.DrawMeshInstanced(mesh, 0, material, 1, matrices, count, properties); return; }
+#endif
+                legacy.DrawMeshInstanced(mesh, 0, material, 1, matrices, count, properties);
+            }
+        }
+        private void DrawInstanced(CommandBuffer command) => DrawInstanced(new InstancingCommand(command));
+        private void DrawInstanced(InstancingCommand command)
         {
             DrawCommandCount = SubmittedGlyphCount = 0;
             if (ActiveGlyphCount == 0 || worldCamera == null) return;
@@ -83,7 +120,7 @@ namespace BurstWord.BRG
             {
                 int id = sortedLabels[i].id;
                 // Scene-transparent draws need one bounds center per complete label, just as a TMP renderer.
-                if (command == null && count != 0) { SubmitInstances(previousPage, previousResource, count, command); count = 0; }
+                if (!command.IsOverlay && count != 0) { SubmitInstances(previousPage, previousResource, count, command); count = 0; }
                 for (int link = labels[id].head; link >= 0; link = links[link].next)
                 {
                     var item = links[link]; var page = glyphPages[item.group];
@@ -101,14 +138,14 @@ namespace BurstWord.BRG
             }
             if (count != 0) SubmitInstances(previousPage, previousResource, count, command);
         }
-        private void SubmitInstances(GlyphPage page, int resource, int count, CommandBuffer command)
+        private void SubmitInstances(GlyphPage page, int resource, int count, InstancingCommand command)
         {
             // Use one material across all resource segments, including A -> B -> A.
             // Changing materials can regroup equal-depth transparent segments by state.
             page.BindInstancedResource(instanceProperties, resource);
             for (int field = 0; field < instanceValues.Length; field++)
                 instanceProperties.SetVectorArray(InstancePropertyIds[field], instanceValues[field]);
-            if (command != null) command.DrawMeshInstanced(quad, 0, instancingMaterial, 1, instanceMatrices, count, instanceProperties);
+            if (command.IsOverlay) command.Draw(quad, instancingMaterial, instanceMatrices, count, instanceProperties);
             else Graphics.DrawMeshInstanced(quad, 0, instancingMaterial, instanceMatrices, count, instanceProperties,
                 ShadowCastingMode.Off, false, gameObject.layer, worldCamera, LightProbeUsage.Off);
             DrawCommandCount++; SubmittedGlyphCount += count;

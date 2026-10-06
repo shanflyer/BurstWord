@@ -1,4 +1,4 @@
-﻿// RichTextKit
+// RichTextKit
 // Copyright © 2019-2020 Topten Software. All Rights Reserved.
 // 
 // Licensed under the Apache License, Version 2.0 (the "License"); you may 
@@ -20,7 +20,7 @@ using System.Text;
 
 // Ported from: https://github.com/foliojs/unicode-trie
 
-namespace Topten.RichTextKit
+namespace BurstWord.Internal.RichTextKit
 {
     internal class UnicodeTrieBuilder
     {

@@ -66,9 +66,15 @@ namespace BurstWord.Baseline.Editor
             Open(animation);
         }
         [UnityEditor.Callbacks.OnOpenAsset]
+        #if UNITY_6000_6_OR_NEWER
+        private static bool OpenAsset(EntityId entityId, int line)
+        {
+            var asset=EditorUtility.EntityIdToObject(entityId) as BrgTextAnimation;
+#else
         private static bool OpenAsset(int instanceID, int line)
         {
             var asset=EditorUtility.InstanceIDToObject(instanceID) as BrgTextAnimation;
+#endif
             if(asset==null)return false;Open(asset);return true;
         }
         public static void Open(BrgTextAnimation animation, BrgDamageTextRenderer source = null)

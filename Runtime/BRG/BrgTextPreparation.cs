@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using TMPro;
+using BurstWord.Typography;
 using UnityEngine;
-using Topten.RichTextKit;
-using Topten.RichTextKit.Utils;
+using BurstWord.Internal.RichTextKit;
+using BurstWord.Internal.RichTextKit.Utils;
 
 namespace BurstWord.BRG
 {
@@ -63,7 +64,7 @@ namespace BurstWord.BRG
                 hash = unchecked((hash ^ (uint)(!tag && c >= '0' && c <= '9' ? '0' : c)) * 1099511628211UL);
                 if (c == '>') tag = false;
             }
-            hash = unchecked((hash ^ (uint)font.GetInstanceID()) * 1099511628211UL);
+            hash = unchecked((hash ^ (ulong)BrgObjectIdentity.Of(font)) * 1099511628211UL);
             hash = unchecked((hash ^ (uint)fontSize.GetHashCode()) * 1099511628211UL);
             return unchecked((hash ^ (uint)color.GetHashCode()) * 1099511628211UL);
         }
@@ -236,7 +237,7 @@ namespace BurstWord.BRG
             // digit-free range therefore has exactly the same tokens, styles and context.
             // No per-glyph hash, object access or style comparison is needed on a hit.
             if (activePreparedMessage.digitPrefix[end] != activePreparedMessage.digitPrefix[start]) return false;
-            int flags = (enableShaping && !shapingUnavailable ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0);
+            int flags = (ShapingEnabled ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0);
             key = (activePreparedMessage, activeParagraphAnalysis, start, end, flags);
             return true;
         }
@@ -267,7 +268,7 @@ namespace BurstWord.BRG
             wrappedLines[key] = entry; wrappedLineGlyphCount += count;
         }
 
-        private struct NativeShapeGlyph { public uint glyph, flags; public int cluster, advance, x, y; }
+        private struct NativeShapeGlyph { public uint glyph, flags; public int cluster; public float advance, x, y; }
         private sealed class ParagraphAnalysis
         {
             public uint[] text, scripts;
@@ -282,7 +283,7 @@ namespace BurstWord.BRG
         {
             activeParagraphAnalysis = null;
             int length = end - start;
-            bool wrap = wrapWidth > 0, shaping = enableShaping && !shapingUnavailable;
+            bool wrap = wrapWidth > 0, shaping = ShapingEnabled;
             ulong hash = (ulong)((wrap ? 1 : 0) | (shaping ? 2 : 0));
             for (int i = start; i < end; i++) hash = unchecked((hash ^ AnalysisPoint(codePoints[i])) * 1099511628211UL);
             if (length <= 512 && paragraphAnalyses.TryGetValue(hash, out var cached) && cached.text.Length == length && cached.wrap == wrap && cached.shaping == shaping)
@@ -372,24 +373,21 @@ namespace BurstWord.BRG
         {
             NativeShapeCalls++;
             using (LayoutTiming(6)) {
-            if (shapingBuffer == IntPtr.Zero) shapingBuffer = HarfBuzzNative.hb_buffer_create();
-            HarfBuzzNative.hb_buffer_clear_contents(shapingBuffer);
-            fixed (uint* points = codePoints)
-                HarfBuzzNative.hb_buffer_add_utf32(shapingBuffer, points + start, end - start, (uint)(first - start), last - first);
-            HarfBuzzNative.hb_buffer_set_direction(shapingBuffer, (levels[first] & 1) != 0 ? 5 : 4);
-            HarfBuzzNative.hb_buffer_set_script(shapingBuffer, scripts[first]);
-            HarfBuzzNative.hb_buffer_guess_segment_properties(shapingBuffer);
-            var features = stackalloc HarfBuzzNative.Feature[3];
-            features[0] = new HarfBuzzNative.Feature { tag = HarfBuzzNative.Tag('k', 'e', 'r', 'n'), value = enableKerning ? 1u : 0u, end = uint.MaxValue };
-            features[1] = new HarfBuzzNative.Feature { tag = HarfBuzzNative.Tag('l', 'i', 'g', 'a'), value = enableLigatures ? 1u : 0u, end = uint.MaxValue };
-            features[2] = new HarfBuzzNative.Feature { tag = HarfBuzzNative.Tag('c', 'l', 'i', 'g'), value = enableLigatures ? 1u : 0u, end = uint.MaxValue };
-            HarfBuzzNative.hb_shape(face.NativeFont, shapingBuffer, features, 3);
-            var infos = HarfBuzzNative.hb_buffer_get_glyph_infos(shapingBuffer, out uint size);
-            var positions = HarfBuzzNative.hb_buffer_get_glyph_positions(shapingBuffer, out _);
-            count = (int)size;
+            shapingOutput.Clear();
+            var request = new TextShapingRequest(codePoints, start, end - start, first, last - first,
+                scripts[first], (levels[first] & 1) != 0, enableKerning, enableLigatures);
+            face.Session.Shape(in request, shapingOutput);
+            count = shapingOutput.Count;
             if (destination.Length < count) Array.Resize(ref destination, Mathf.NextPowerOfTwo(count));
-            for (int i = 0; i < count; i++) destination[i] = new NativeShapeGlyph { glyph = infos[i].glyph, flags = infos[i].mask & 7u,
-                cluster = start + (int)infos[i].cluster - first, advance = positions[i].xAdvance, x = positions[i].xOffset, y = positions[i].yOffset };
+            for (int i = 0; i < count; i++)
+            {
+                var glyph = shapingOutput[i];
+                if (glyph.Cluster < first || glyph.Cluster >= last || float.IsNaN(glyph.Advance) || float.IsInfinity(glyph.Advance) ||
+                    float.IsNaN(glyph.OffsetX) || float.IsInfinity(glyph.OffsetX) || float.IsNaN(glyph.OffsetY) || float.IsInfinity(glyph.OffsetY))
+                    throw new InvalidOperationException("The shaping adapter returned an invalid cluster or position.");
+                destination[i] = new NativeShapeGlyph { glyph = glyph.GlyphId, flags = glyph.Flags,
+                    cluster = glyph.Cluster - first, advance = glyph.Advance, x = glyph.OffsetX, y = glyph.OffsetY };
+            }
             }
         }
     }

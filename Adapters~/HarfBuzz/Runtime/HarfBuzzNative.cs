@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace BurstWord.BRG
+namespace BurstWord.Adapters.HarfBuzz
 {
     // HarfBuzz 8.3.1 C ABI. Handles belong to a renderer and are disposed on disable.
     internal static unsafe class HarfBuzzNative

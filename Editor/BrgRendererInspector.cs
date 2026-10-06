@@ -11,8 +11,11 @@ namespace BurstWord.Baseline.Editor
         {
             var renderer = (BrgDamageTextRenderer)target;
             var previousBackend = renderer.renderBackend;
+            var previousShaper = renderer.textShaper;
+            bool previousShaping = renderer.enableShaping;
             DrawDefaultInspector();
-            if (Application.isPlaying && renderer.isActiveAndEnabled && previousBackend != renderer.renderBackend)
+            if (Application.isPlaying && renderer.isActiveAndEnabled && (previousBackend != renderer.renderBackend ||
+                previousShaper != renderer.textShaper || previousShaping != renderer.enableShaping))
             { renderer.enabled = false; renderer.enabled = true; }
             var animationRenderer = (BrgDamageTextRenderer)target;
             if (GUILayout.Button("编辑 / 预览 GPU 动画")) BrgAnimationEditor.Open(animationRenderer.defaultAnimation, animationRenderer);
@@ -21,6 +24,7 @@ namespace BurstWord.Baseline.Editor
             EditorGUILayout.LabelField("Live rendering statistics", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("Active backend", renderer.ActiveBackend.ToString());
             EditorGUILayout.LabelField("Backend selection", renderer.BackendReason);
+            EditorGUILayout.LabelField("Typography", renderer.ShaperName);
             EditorGUILayout.LabelField("Active labels / glyphs", renderer.ActiveCount + " / " + renderer.ActiveGlyphCount);
             EditorGUILayout.LabelField("Emitted / capacity drops", renderer.EmittedCount + " / " + renderer.DroppedCount);
             EditorGUILayout.LabelField("Draw commands / submitted glyphs", renderer.DrawCommandCount + " / " + renderer.SubmittedGlyphCount);
