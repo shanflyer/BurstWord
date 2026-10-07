@@ -136,14 +136,14 @@ namespace BurstWord.BRG
             public UnityEngine.Vector2 size;
             public bool shaping;
         }
-        private readonly Dictionary<(ParsedMessage, ParagraphAnalysis, float, int), MeasuredPlan> measuredPlans =
-            new Dictionary<(ParsedMessage, ParagraphAnalysis, float, int), MeasuredPlan>();
+        private readonly Dictionary<(ParsedMessage, ParagraphAnalysis, float, int, UnityEngine.Vector2), MeasuredPlan> measuredPlans =
+            new Dictionary<(ParsedMessage, ParagraphAnalysis, float, int, UnityEngine.Vector2), MeasuredPlan>();
         private readonly List<MeasuredPatch> measuredPatches = new List<MeasuredPatch>(16);
         private readonly List<int> measuredPlanBoundaries = new List<int>(16);
         private int measuredPlanGlyphCount;
         private bool captureMeasuredPlan, measuredPlanEligible;
-        private (ParsedMessage, ParagraphAnalysis, float, int) MeasuredPlanKey() => (activePreparedMessage, activeParagraphAnalysis, wrapWidth,
-            (ShapingEnabled ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0));
+        private (ParsedMessage, ParagraphAnalysis, float, int, UnityEngine.Vector2) MeasuredPlanKey() => (activePreparedMessage, activeParagraphAnalysis, wrapWidth,
+            (ShapingEnabled ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0) | AlignmentFlags, LayoutTextArea);
 
         private bool TryCompleteMeasuredLayout()
         {

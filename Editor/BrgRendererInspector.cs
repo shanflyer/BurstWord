@@ -62,6 +62,7 @@ namespace BurstWord.Baseline.Editor
             if (space.enumValueIndex != (int)BrgDamageTextRenderer.SpaceMode.ScreenSnapshot)
                 EditorGUILayout.HelpBox("To follow an object, call EmitText(targetTransform, ...) or update a TextHandle's pose.", MessageType.Info);
 
+            DrawAlignment();
             var width = serializedObject.FindProperty("wrapWidth");
             bool wrapping = width.floatValue > 0;
             bool selected = EditorGUILayout.Toggle("Automatic Wrapping", wrapping);
@@ -70,7 +71,7 @@ namespace BurstWord.Baseline.Editor
                 if (wrapping) { lastWrapWidth = width.floatValue; width.floatValue = 0; }
                 else width.floatValue = Mathf.Max(1, lastWrapWidth);
             }
-            if (selected) Field("wrapWidth", "Wrap Width");
+            if (selected) Field("wrapWidth", "Wrap Width", "Maximum line width in layout units. An enabled fixed text area can reduce this to its width.");
 
             if (Section(ref fonts, "Additional fonts (optional)"))
             {
@@ -148,6 +149,24 @@ namespace BurstWord.Baseline.Editor
             if (Application.isPlaying && renderer.isActiveAndEnabled && resourceChanges)
             { renderer.enabled = false; renderer.enabled = true; }
             if (Application.isPlaying) DrawStatistics(renderer);
+        }
+
+        private void DrawAlignment()
+        {
+            EditorGUILayout.Space(5);
+            EditorGUILayout.LabelField("Text alignment", EditorStyles.boldLabel);
+            var anchor = serializedObject.FindProperty("alignment");
+            int horizontal = anchor.enumValueIndex % 3, vertical = anchor.enumValueIndex / 3;
+            EditorGUILayout.BeginHorizontal(); EditorGUILayout.PrefixLabel("Horizontal");
+            horizontal = GUILayout.Toolbar(horizontal, new[] { "Left", "Center", "Right" });
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.BeginHorizontal(); EditorGUILayout.PrefixLabel("Vertical");
+            vertical = GUILayout.Toolbar(vertical, new[] { "Top", "Middle", "Bottom" });
+            EditorGUILayout.EndHorizontal();
+            anchor.enumValueIndex = vertical * 3 + horizontal;
+            Field("useTextArea", "Use Fixed Text Area", "Off: align against the emission point. On: align within an area centered on that point.");
+            if (serializedObject.FindProperty("useTextArea").boolValue)
+                Field("textAreaSize", "Text Area Size", "Width / height in layout units, scaled with the text. This area does not clip overflowing text.");
         }
 
         private void DrawScreenScaling()

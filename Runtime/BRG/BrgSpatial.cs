@@ -189,25 +189,36 @@ namespace BurstWord.BRG
             => EmitText(target, text, color, offset, rotation, scale, horizontalDrift, durationScale,
                 animation, animationAmplitude, font: null);
 
+        public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset,
+            Quaternion? rotation, Vector3? scale, float horizontalDrift, float durationScale,
+            BrgTextAnimation animation, float animationAmplitude, TMP_FontAsset font,
+            Material material, int fontSize, bool useLegacyAnimation)
+            => EmitText(target, text, color, offset, rotation, scale, horizontalDrift, durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment: null);
+
         public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset = default,
             Quaternion? rotation = null, Vector3? scale = null, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null)
         {
             if (target == null) return default;
             var local = new TextPose(Vector3.zero, rotation ?? Quaternion.identity, scale ?? Vector3.one, offset);
             return EmitSpatial(text, color, target, local, horizontalDrift, durationScale,
-                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, material, fontSize);
+                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, material, fontSize, alignment, textAreaSize);
         }
         public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift, float durationScale,
             BrgTextAnimation animation, float animationAmplitude)
             => EmitText(pose, text, color, horizontalDrift, durationScale, animation, animationAmplitude, font: null);
 
+        public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift, float durationScale,
+            BrgTextAnimation animation, float animationAmplitude, TMP_FontAsset font,
+            Material material, int fontSize, bool useLegacyAnimation)
+            => EmitText(pose, text, color, horizontalDrift, durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment: null);
+
         public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null)
             => EmitSpatial(text, color, null, pose, horizontalDrift, durationScale,
-                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, material, fontSize);
+                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, material, fontSize, alignment, textAreaSize);
 
         public bool IsAlive(TextHandle handle) => ReferenceEquals(handle.owner, this) && labels != null &&
             handle.index >= 0 && handle.index < labels.Length && labels[handle.index].active &&
@@ -228,9 +239,10 @@ namespace BurstWord.BRG
 
         private TextHandle EmitSpatial(string text, Color color, Transform target, TextPose pose, float drift, float durationScale,
             BrgTextAnimation animation = null, float amplitude = 1, bool resolvedAnimation = false,
-            TMP_FontAsset selectedFont = null, Material selectedMaterial = null, int selectedSize = 0)
+            TMP_FontAsset selectedFont = null, Material selectedMaterial = null, int selectedSize = 0,
+            TextAnchor? selectedAlignment = null, Vector2? selectedTextArea = null)
         {
-            using var appearance = new EmissionAppearanceScope(this, selectedFont, selectedMaterial, selectedSize);
+            using var appearance = new EmissionAppearanceScope(this, selectedFont, selectedMaterial, selectedSize, selectedAlignment, selectedTextArea);
             using (preparingBatch ? default(Unity.Profiling.ProfilerMarker.AutoScope) : GenerateMarker.Auto())
             {
                 if (!isActiveAndEnabled || !IsInitialized || string.IsNullOrEmpty(text)) return default;
@@ -852,4 +864,3 @@ namespace BurstWord.BRG
         }
     }
 }
-

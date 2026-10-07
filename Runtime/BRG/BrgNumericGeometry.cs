@@ -112,8 +112,8 @@ namespace BurstWord.BRG
                 x += (glyph.advance + adjustment.z) * glyph.scale;
             }
             lineWidths.Add(x);
-            float y = (ascent + descent) * .5f;
-            for (int i = 0; i < layout.Count; i++) { var placed = layout[i]; placed.rect.x -= x * .5f; placed.rect.y -= y; layout[i] = placed; }
+            float offsetX = HorizontalStart(x), offsetY = BaselineOffset(ascent, descent);
+            for (int i = 0; i < layout.Count; i++) { var placed = layout[i]; placed.rect.x += offsetX; placed.rect.y += offsetY; layout[i] = placed; }
             return true;
         }
     }

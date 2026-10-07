@@ -172,26 +172,36 @@ namespace BurstWord.BRG
         public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift, float durationScale)
             => Emit(worldPosition, damage, color, horizontalDrift, durationScale, font: null);
 
+        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift, float durationScale,
+            BrgTextAnimation animation, float animationAmplitude, TMP_FontAsset font,
+            Material material, int fontSize, bool useLegacyAnimation)
+            => Emit(worldPosition, damage, color, horizontalDrift, durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment: null);
+
         public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null)
         {
             if (!isActiveAndEnabled || !IsInitialized) return false;
             if (freeLabelCount == 0) { DroppedCount++; return false; }
             // Keep the same integer-to-string work as the baseline for this first comparison.
             return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift,
-                durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation);
+                durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment, textAreaSize);
         }
 
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float durationScale)
             => EmitText(worldPosition, text, color, horizontalDrift, durationScale, font: null);
 
+        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float durationScale,
+            BrgTextAnimation animation, float animationAmplitude, TMP_FontAsset font,
+            Material material, int fontSize, bool useLegacyAnimation)
+            => EmitText(worldPosition, text, color, horizontalDrift, durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment: null);
+
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null)
             => EmitSpatial(text, color, null, new TextPose(worldPosition, Quaternion.identity, Vector3.one),
                 horizontalDrift, durationScale, useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation,
-                animationAmplitude, true, font, material, fontSize).IsAlive;
+                animationAmplitude, true, font, material, fontSize, alignment, textAreaSize).IsAlive;
 
         private bool BuildBasicLayout(string text, Color color)
         {
@@ -275,8 +285,8 @@ namespace BurstWord.BRG
                 if (!Resolve(unicode, out var resolved) && !Resolve(0xfffd, out resolved)) Resolve('?', out resolved);
                 if (resolved.character.glyph.metrics.width <= 0 || resolved.character.glyph.metrics.height <= 0) continue;
                 var item = layout[positioned];
-                item.rect.x -= lineWidths[line] * 0.5f;
-                item.rect.y -= (ascender + descender) * 0.5f;
+                item.rect.x += HorizontalStart(lineWidths[line]);
+                item.rect.y += BaselineOffset(ascender, descender);
                 layout[positioned++] = item;
             }
             return true;
@@ -637,4 +647,3 @@ namespace BurstWord.BRG
         }
     }
 }
-

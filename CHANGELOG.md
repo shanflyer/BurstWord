@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+- Add horizontal left/center/right and vertical top/middle/bottom alignment, preserving centered emission-point alignment by default.
+- Optionally align within a fixed numeric text area without creating a RectTransform; automatic wrapping respects the area's width.
+- Allow alignment and text-area overrides on numeric, text, Transform/pose and batch emissions, preserving previous public signatures.
+- Include alignment and area dimensions in positioned-layout cache keys, and retain numeric Burst preparation and instance-write jobs for mixed alignment batches.
+
 ## 0.3.2
 
 - Match screen-text scaling to Unity Canvas Scaler: Constant Pixel Size, Scale With Screen Size with Match Width Or Height / Expand / Shrink, and Constant Physical Size with DPI fallback.

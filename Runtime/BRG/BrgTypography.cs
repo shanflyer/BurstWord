@@ -255,7 +255,7 @@ namespace BurstWord.BRG
                         {
                             width += advances[i];
                             if (i > lineStart && breakAfter[i] && !tokens[i - 1].style.noBreak) lastBreak = i;
-                            if (width > wrapWidth && i > lineStart)
+                            if (width > LayoutWrapWidth && i > lineStart)
                             {
                                 // Emergency wrapping only at grapheme AND shaped-cluster boundaries.
                                 if (lastBreak > lineStart) { lineEnd = lastBreak; break; }
@@ -268,7 +268,7 @@ namespace BurstWord.BRG
                     while (visibleEnd > lineStart && (tokens[visibleEnd - 1].unicode == ' ' || tokens[visibleEnd - 1].unicode == '\t')) visibleEnd--;
                     if (captureMeasuredPlan && (!measuredBoundaries[lineStart] || !measuredBoundaries[visibleEnd])) measuredPlanEligible = false;
                     if (captureMeasuredPlan) { measuredPlanBoundaries.Add(lineStart); measuredPlanBoundaries.Add(visibleEnd); }
-                    (ParsedMessage, ParagraphAnalysis, int, int, int) lineKey = default;
+                    (ParsedMessage, ParagraphAnalysis, int, int, int, float) lineKey = default;
                     bool cacheLine = wrapWidth > 0 && WrappedLineKey(lineStart, visibleEnd, out lineKey);
                     if (cacheLine && TryWrappedLine(lineKey, ref y, out float cachedWidth))
                     {
@@ -296,7 +296,7 @@ namespace BurstWord.BRG
                         descent = Mathf.Min(descent, face.descentLine * scale + style.baseline);
                     }
                     y -= ascent;
-                    float x = -lineWidth * 0.5f;
+                    float x = HorizontalStart(lineWidth);
                     ReorderRuns();
                     using (LayoutTiming(5)) foreach (int runIndex in visualRuns)
                     {
@@ -318,7 +318,7 @@ namespace BurstWord.BRG
                 paragraphStart = paragraphEnd + 1;
             }
             if (tokens[tokens.Count - 1].unicode == '\n') { y -= LayoutFontSize * 1.2f; lines++; }
-            float center = -y * 0.5f;
+            float center = VerticalOffset(-y);
             for (int i = 0; i < layout.Count; i++) { var item = layout[i]; item.rect.y += center; layout[i] = item; }
             LastLayoutLineCount = lines; LastLayoutSize = new Vector2(maxWidth, -y);
             if (captureMeasuredPlan && measuredPlanEligible) StoreCompleteMeasuredLayout(center);

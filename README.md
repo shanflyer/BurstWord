@@ -34,6 +34,8 @@ Start with the [direct-integration tutorial](Documentation~/QUICKSTART.md). The 
 
 Screen-space text supports the same scaling modes and formulas as Unity's **Canvas Scaler**: Constant Pixel Size, Scale With Screen Size (Match Width Or Height / Expand / Shrink), and Constant Physical Size. Configure **UI scaling** on the manager, or assign an existing screen-space Canvas to use its root Canvas's actual scale factor. The default remains 1920×1080 with Match 0.5. Scaling changes apply to live screen text without rebuilding labels; world-space text retains world units and perspective.
 
+**Text alignment** supplies left/center/right and top/middle/bottom controls. Align against the emission point, or enable **Use Fixed Text Area** to align inside a numeric width/height area centered on that point. Both modes create no UI objects. Each emission and batch request can override `alignment: TextAnchor.UpperLeft` and `textAreaSize: new Vector2(300, 100)`; alignment is captured at emission and shared with cached and Job-prepared layouts.
+
 `Render Backend` defaults to **Auto**: it uses BRG on compatible D3D11/D3D12, Vulkan and Metal devices, and falls back to ordinary instanced draws when that BRG path is unavailable. WebGL 2 and OpenGL/OpenGL ES use the fallback. Choose **Instancing** to test it directly. Both backends keep the same typography, whole-message ordering, space modes and GPU animation; the fallback never creates text objects. The benchmark panel shows the active backend and lets you switch it.
 
 ## Optional shaping

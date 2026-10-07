@@ -44,21 +44,32 @@ namespace BurstWord.BRG
             public TMP_FontAsset Font;
             public Material Material;
             public int FontSize;
+            public TextAnchor? Alignment;
+            public Vector2? TextAreaSize;
             public TextEmission(string text, Color color, TextPose pose, float wrapWidth,
                 float horizontalDrift, float durationScale, Transform target,
                 BrgTextAnimation animation, float animationAmplitude, bool useLegacyAnimation)
                 : this(text, color, pose, wrapWidth, horizontalDrift, durationScale, target,
                     animation, animationAmplitude, useLegacyAnimation, null, null, 0) { }
 
+            public TextEmission(string text, Color color, TextPose pose, float wrapWidth,
+                float horizontalDrift, float durationScale, Transform target,
+                BrgTextAnimation animation, float animationAmplitude, bool useLegacyAnimation,
+                TMP_FontAsset font, Material material, int fontSize)
+                : this(text, color, pose, wrapWidth, horizontalDrift, durationScale, target,
+                    animation, animationAmplitude, useLegacyAnimation, font, material, fontSize, alignment: null) { }
+
             public TextEmission(string text, Color color, TextPose pose, float wrapWidth = 0,
                 float horizontalDrift = 0, float durationScale = 1, Transform target = null,
                 BrgTextAnimation animation = null, float animationAmplitude = 1, bool useLegacyAnimation = false,
-                TMP_FontAsset font = null, Material material = null, int fontSize = 0)
+                TMP_FontAsset font = null, Material material = null, int fontSize = 0,
+                TextAnchor? alignment = null, Vector2? textAreaSize = null)
             {
                 Text = text; Color = color; Pose = pose; Target = target; WrapWidth = wrapWidth;
                 HorizontalDrift = horizontalDrift; DurationScale = durationScale;
                 Animation = animation; AnimationAmplitude = animationAmplitude; UseLegacyAnimation = useLegacyAnimation;
                 Font = font; Material = material; FontSize = fontSize;
+                Alignment = alignment; TextAreaSize = textAreaSize;
             }
         }
 
@@ -107,7 +118,7 @@ namespace BurstWord.BRG
             public Token[] source;
             public int[] digits;
             public LinkedListNode<PreparationTemplate> cacheNode;
-            public (ParsedMessage, ParagraphAnalysis, float, int) key;
+            public (ParsedMessage, ParagraphAnalysis, float, int, Vector2) key;
             public NativeArray<PreparedGlyph> glyphs, replacements;
             public NativeArray<PreparationRun> runs;
             public NativeArray<PreparationSignature> signature;
@@ -134,7 +145,7 @@ namespace BurstWord.BRG
                 foreach (var item in alternativeTemplates) item.Dispose();
             }
         }
-        private struct PreparationRequest { public PreparationTemplateData template; public int points, output, measurement, numericCount; public Color color; }
+        private struct PreparationRequest { public PreparationTemplateData template; public int points, output, measurement, numericCount; public Color color; public TextAnchor alignment; public Vector2 area; }
         private struct PreparationResult { public int valid, nativeCalls, measured, alternative; public Vector2 size; }
         private struct QueuedPreparation
         {
@@ -145,24 +156,24 @@ namespace BurstWord.BRG
             public Vector2 size;
             public bool shaping, ready, numeric;
         }
-        private readonly Dictionary<(ParsedMessage, ParagraphAnalysis, float, int), PreparationTemplate> preparationTemplates =
-            new Dictionary<(ParsedMessage, ParagraphAnalysis, float, int), PreparationTemplate>();
-        private readonly HashSet<(ParsedMessage, ParagraphAnalysis, float, int)> preparationAttempted =
-            new HashSet<(ParsedMessage, ParagraphAnalysis, float, int)>();
-        private readonly Dictionary<(ParsedMessage, float, int), PreparationTemplate> compiledPreparations =
-            new Dictionary<(ParsedMessage, float, int), PreparationTemplate>();
+        private readonly Dictionary<(ParsedMessage, ParagraphAnalysis, float, int, Vector2), PreparationTemplate> preparationTemplates =
+            new Dictionary<(ParsedMessage, ParagraphAnalysis, float, int, Vector2), PreparationTemplate>();
+        private readonly HashSet<(ParsedMessage, ParagraphAnalysis, float, int, Vector2)> preparationAttempted =
+            new HashSet<(ParsedMessage, ParagraphAnalysis, float, int, Vector2)>();
+        private readonly Dictionary<(ParsedMessage, float, int, Vector2), PreparationTemplate> compiledPreparations =
+            new Dictionary<(ParsedMessage, float, int, Vector2), PreparationTemplate>();
         private readonly LinkedList<PreparationTemplate> preparationLru = new LinkedList<PreparationTemplate>();
         private readonly List<PreparationTemplate> retiredPreparations = new List<PreparationTemplate>();
         private int preparationVariantCount;
         private const int MaxPreparationAlternatives = 8;
         private int PreparationFlags => (ShapingEnabled ? 1 : 0) | (enableKerning ? 2 : 0) |
-            (enableLigatures ? 4 : 0) | (tightGlyphBounds ? 8 : 0);
+            (enableLigatures ? 4 : 0) | (tightGlyphBounds ? 8 : 0) | AlignmentFlags;
         private void TouchPreparation(PreparationTemplate template)
         { preparationLru.Remove(template.cacheNode); preparationLru.AddLast(template.cacheNode); }
         private void RetirePreparation(PreparationTemplate template)
         {
             preparationTemplates.Remove(template.key); preparationAttempted.Remove(template.key);
-            compiledPreparations.Remove((template.message, template.key.Item3, template.key.Item4));
+            compiledPreparations.Remove((template.message, template.key.Item3, template.key.Item4, template.key.Item5));
             preparationLru.Remove(template.cacheNode);
             preparationVariantCount -= template.alternativeTemplates.Count + 1;
             // A queued request holds raw pointers until its worker and commit finish.
@@ -180,7 +191,7 @@ namespace BurstWord.BRG
             template = null;
             if (!useCompiledPreparationFastPath || !FindParsedMessage(text, color, out var entry) || entry.digitChoices == null ||
                 !ReferenceEquals(entry.digitSprite, ActiveSpriteAsset) ||
-                !compiledPreparations.TryGetValue((entry, wrapWidth, PreparationFlags), out template)) return false;
+                !compiledPreparations.TryGetValue((entry, wrapWidth, PreparationFlags, LayoutTextArea), out template)) return false;
             for (int slot = 0; slot < entry.digitTokens.Length; slot++)
             {
                 int index = entry.digitTokens[slot]; var token = template.source[index];
@@ -214,10 +225,10 @@ namespace BurstWord.BRG
         private static readonly ProfilerMarker JobPrepareMarker = new ProfilerMarker("BurstWord.BRG.JobPreparation");
         private static readonly ProfilerMarker JobWaitMarker = new ProfilerMarker("BurstWord.BRG.JobWait");
 
-        private (ParsedMessage, ParagraphAnalysis, float, int) PreparationKey()
+        private (ParsedMessage, ParagraphAnalysis, float, int, Vector2) PreparationKey()
         {
             var key = MeasuredPlanKey();
-            return (key.Item1, key.Item2, key.Item3, key.Item4 | (tightGlyphBounds ? 8 : 0));
+            return (key.Item1, key.Item2, key.Item3, key.Item4 | (tightGlyphBounds ? 8 : 0), key.Item5);
         }
         private static void EnsurePreparationCapacity<T>(ref NativeArray<T> buffer, int count) where T : struct
         {
@@ -249,7 +260,7 @@ namespace BurstWord.BRG
                         var request = requests[i]; wrapWidth = request.WrapWidth;
                         var handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.DurationScale,
                             request.UseLegacyAnimation ? null : request.Animation ?? ActiveDefaultAnimation, request.AnimationAmplitude, true,
-                            request.Font, request.Material, request.FontSize);
+                            request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize);
                         if (handles != null) handles[i] = handle;
                     }
                     return;
@@ -266,7 +277,7 @@ namespace BurstWord.BRG
                     for (int i = 0; i < count; i++)
                     {
                         var request = requests[i]; wrapWidth = request.WrapWidth;
-                        using var appearance = new EmissionAppearanceScope(this, request.Font, request.Material, request.FontSize);
+                        using var appearance = new EmissionAppearanceScope(this, request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize);
                         preparationQueue[i] = new QueuedPreparation { request = request };
                         preparationRequests[i] = default; preparationResults[i] = default;
                         if (handles != null) handles[i] = default;
@@ -277,7 +288,7 @@ namespace BurstWord.BRG
                             EnsurePreparationCapacity(ref preparationOutput,output+numberGlyphs);
                             EnsurePreparationCapacity(ref preparationPoints,points+request.Text.Length);
                             for (int j=0;j<request.Text.Length;j++) preparationPoints[points+j]=request.Text[j];
-                            preparationRequests[i]=new PreparationRequest { numericCount=request.Text.Length, points=points, output=output, color=request.Color };
+                            preparationRequests[i]=new PreparationRequest { numericCount=request.Text.Length, points=points, output=output, color=request.Color, alignment=LayoutAlignment, area=LayoutTextArea };
                             preparationQueue[i]=new QueuedPreparation { request=request, output=output, count=numberGlyphs, ready=true, numeric=true, lines=1 };
                             points+=request.Text.Length; output+=numberGlyphs; accepted++; jobs++; continue;
                         }
@@ -336,7 +347,7 @@ namespace BurstWord.BRG
                 {
                     var queued = preparationQueue[i]; if (!queued.ready) continue;
                     var request = queued.request; wrapWidth = request.WrapWidth;
-                    using var appearance = new EmissionAppearanceScope(this, request.Font, request.Material, request.FontSize);
+                    using var appearance = new EmissionAppearanceScope(this, request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize);
                     TextHandle handle;
                     if (queued.template != null && preparationResults[i].valid == 0)
                     {
@@ -346,7 +357,7 @@ namespace BurstWord.BRG
                         reusedBatchMeasurementOffset = queued.measurement;
                         try { handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.DurationScale,
                             request.UseLegacyAnimation ? null : request.Animation ?? ActiveDefaultAnimation, request.AnimationAmplitude, true,
-                            request.Font, request.Material, request.FontSize); }
+                            request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize); }
                         finally { reusedBatchMeasurement = null; }
                     }
                     else
@@ -580,7 +591,7 @@ namespace BurstWord.BRG
                     template.alternatives = new NativeArray<PreparationTemplateData>(MaxPreparationAlternatives, Allocator.Persistent);
                     template.alternatives[0] = template.Data;
                     preparationTemplates.Add(template.key, template);
-                    compiledPreparations[(template.message, template.key.Item3, template.key.Item4)] = template;
+                    compiledPreparations[(template.message, template.key.Item3, template.key.Item4, template.key.Item5)] = template;
                     template.cacheNode = preparationLru.AddLast(template);
                     preparationVariantCount++;
                 }
@@ -804,8 +815,9 @@ namespace BurstWord.BRG
                     }
                     x+=(glyph.advance+adjustment.z)*glyph.scale;
                 }
-                float y=(ascent+descent)*.5f;
-                for (int i=0;i<count;i++) { destination[i].rect.x-=x*.5f; destination[i].rect.y-=y; }
+                float offsetX=HorizontalStart(x,request.alignment,request.area);
+                float offsetY=VerticalOffset(ascent-descent,request.alignment,request.area)-ascent;
+                for (int i=0;i<count;i++) { destination[i].rect.x+=offsetX; destination[i].rect.y+=offsetY; }
                 results[index]=new PreparationResult { valid=1, size=new Vector2(x,numericSize) };
             }
         }

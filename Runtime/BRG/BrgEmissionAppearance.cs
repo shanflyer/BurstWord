@@ -24,20 +24,26 @@ namespace BurstWord.BRG
             private readonly TMP_FontAsset previousFont;
             private readonly Material previousMaterial;
             private readonly int previousSize;
+            private readonly TextAnchor previousAlignment;
+            private readonly Vector2 previousTextArea;
             private readonly bool previousActive;
 
             public EmissionAppearanceScope(BrgDamageTextRenderer renderer, TMP_FontAsset selectedFont,
-                Material selectedMaterial, int selectedSize)
+                Material selectedMaterial, int selectedSize, TextAnchor? selectedAlignment = null, Vector2? selectedTextArea = null)
             {
                 owner = renderer;
                 previousFont = renderer.emissionFont;
                 previousMaterial = renderer.emissionMaterial;
                 previousSize = renderer.emissionFontSize;
+                previousAlignment = renderer.emissionAlignment;
+                previousTextArea = renderer.emissionTextArea;
                 previousActive = renderer.hasEmissionAppearance;
                 renderer.emissionFont = selectedFont != null ? selectedFont : renderer.font;
                 renderer.emissionMaterial = selectedMaterial != null ? selectedMaterial :
                     (selectedFont == null || ReferenceEquals(selectedFont, renderer.font) ? renderer.DefaultLayoutMaterial : null);
                 renderer.emissionFontSize = selectedSize > 0 ? selectedSize : renderer.fontSize;
+                renderer.emissionAlignment = selectedAlignment ?? renderer.alignment;
+                renderer.emissionTextArea = selectedTextArea ?? (renderer.useTextArea ? renderer.textAreaSize : Vector2.zero);
                 renderer.hasEmissionAppearance = true;
             }
 
@@ -46,6 +52,8 @@ namespace BurstWord.BRG
                 owner.emissionFont = previousFont;
                 owner.emissionMaterial = previousMaterial;
                 owner.emissionFontSize = previousSize;
+                owner.emissionAlignment = previousAlignment;
+                owner.emissionTextArea = previousTextArea;
                 owner.hasEmissionAppearance = previousActive;
             }
         }

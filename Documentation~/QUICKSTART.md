@@ -38,6 +38,26 @@
 
 默认是 **Scale With Screen Size / 1920×1080 / Match Width Or Height / Match 0.5**。将参数设为和你的 UI 一样即可；设置实时影响已存在的屏幕飘字，无需重新发射。手动设置以相机的完整输出尺寸为缩放基准，分屏视口只影响投影；Render Texture 使用完整纹理尺寸。字号和动画的屏幕位移一起缩放，目标远近不会改变屏幕字号。
 
+### 横向和纵向对齐
+
+管理器的 **Text alignment** 提供 **Horizontal：Left / Center / Right** 和 **Vertical：Top / Middle / Bottom**，可组合成九种对齐方式。默认仍是横向、纵向居中。
+
+- **Use Fixed Text Area 关闭**：以发射位置为锚点。Left 从该点向右排，Right 向左排；Top 向下排，Bottom 向上排，多行文字使用相同的对齐边。
+- **Use Fixed Text Area 开启**：设置 **Text Area Size** 的宽、高，在以发射位置为中心的区域内对齐，类似 UI Text 在 RectTransform 内对齐。区域仅保存数值，不创建 UI 对象，也不裁剪超出的文字。
+- **Automatic Wrapping** 开启后按 Wrap Width 换行；固定区域更窄时使用区域宽度作为上限。关闭时仍可通过 `\n` 主动换行。
+
+尺寸使用和字号相同的排版单位：屏幕模式一起接受 UI scaling，世界模式一起接受世界单位比例和目标姿态。对齐和区域在发射时捕获，修改默认值只影响后续发射。
+
+单条可以覆盖设置：
+
+```csharp
+damageText.EmitText(hitPosition, "Critical 1234", Color.yellow,
+    alignment: TextAnchor.UpperLeft,
+    textAreaSize: new Vector2(300, 100));
+```
+
+`alignment` 留空使用管理器对齐，`textAreaSize` 留空使用管理器区域；明确传入 `Vector2.zero` 可让本条使用发射点锚定。这些参数也适用于数字、Transform / TextPose 和批量 `TextEmission` 接口。
+
 ## 4. 第一条飘字
 
 创建 `DamageTextExample.cs`，挂到任意场景物体，在 Inspector 中关联管理器和目标：

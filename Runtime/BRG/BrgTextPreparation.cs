@@ -207,7 +207,7 @@ namespace BurstWord.BRG
                 descent = Mathf.Min(descent, face.descentLine * faceScale + token.style.baseline);
             }
             float height = ascent - descent + LayoutFontSize * 0.2f;
-            float baseline = -ascent + height * 0.5f, cursor = -width * 0.5f;
+            float baseline = -ascent + VerticalOffset(height), cursor = HorizontalStart(width);
             foreach (var item in shaped)
             {
                 AddPlaced(item, cursor + item.x, baseline + item.y); cursor += item.advance;
@@ -227,10 +227,10 @@ namespace BurstWord.BRG
             public int substitutions;
             public bool shaping;
         }
-        private readonly Dictionary<(ParsedMessage, ParagraphAnalysis, int, int, int), WrappedLine> wrappedLines =
-            new Dictionary<(ParsedMessage, ParagraphAnalysis, int, int, int), WrappedLine>();
+        private readonly Dictionary<(ParsedMessage, ParagraphAnalysis, int, int, int, float), WrappedLine> wrappedLines =
+            new Dictionary<(ParsedMessage, ParagraphAnalysis, int, int, int, float), WrappedLine>();
         private int wrappedLineGlyphCount;
-        private bool WrappedLineKey(int start, int end, out (ParsedMessage, ParagraphAnalysis, int, int, int) key)
+        private bool WrappedLineKey(int start, int end, out (ParsedMessage, ParagraphAnalysis, int, int, int, float) key)
         {
             key = default;
             if (end <= start || end - start > 128 || activePreparedMessage == null || activeParagraphAnalysis == null) return false;
@@ -239,10 +239,10 @@ namespace BurstWord.BRG
             // No per-glyph hash, object access or style comparison is needed on a hit.
             if (activePreparedMessage.digitPrefix[end] != activePreparedMessage.digitPrefix[start]) return false;
             int flags = (ShapingEnabled ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0);
-            key = (activePreparedMessage, activeParagraphAnalysis, start, end, flags);
+            key = (activePreparedMessage, activeParagraphAnalysis, start, end, flags | AlignmentFlags, LayoutTextArea.x);
             return true;
         }
-        private bool TryWrappedLine((ParsedMessage, ParagraphAnalysis, int, int, int) key, ref float y, out float width)
+        private bool TryWrappedLine((ParsedMessage, ParagraphAnalysis, int, int, int, float) key, ref float y, out float width)
         {
             width = 0;
             if (!wrappedLines.TryGetValue(key, out var entry)) return false;
@@ -255,7 +255,7 @@ namespace BurstWord.BRG
             LastLayoutUsedShaping |= entry.shaping; LastGlyphSubstitutionCount += entry.substitutions;
             return true;
         }
-        private void StoreWrappedLine((ParsedMessage, ParagraphAnalysis, int, int, int) key, int layoutStart, float y, float step,
+        private void StoreWrappedLine((ParsedMessage, ParagraphAnalysis, int, int, int, float) key, int layoutStart, float y, float step,
             float width, int substitutions, bool shaping)
         {
             int count = layout.Count - layoutStart;
