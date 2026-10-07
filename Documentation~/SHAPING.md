@@ -66,6 +66,10 @@ An advanced provider that requests original font bytes can use `BrgFontSources`.
 
 `TextShapingFunctions` contains `FunctionPointer<ShapeTextRun>` and `FunctionPointer<ReleaseTextWorker>`. Both must be valid. The job receives an immutable font handle, a per-thread worker pointer passed by reference, UTF-32 text/context, a sub-run and feature flags (RTL=1, kerning=2, ligatures=4). Job clusters are relative to its input pointer. Return an unmanaged glyph buffer owned by the worker, valid until its next call; reuse it and free it in Release. Sessions from one factory must use the same function pair, and worker state must safely handle changing fonts. Preserve callbacks for IL2CPP/AOT. The core completes jobs before worker/session cleanup.
 
-## Optional HarfBuzz adapter
+## External libraries and packaging
 
-The separate `Adapters~/HarfBuzz` package is one optional implementation. Installing it does not activate it. Explicitly call `renderer.SetTextShaperProvider(harfBuzz)` with that adapter's factory if you choose its native Job integration. Font-data preparation and target-specific libraries belong to the adapter package. Details are in the [adapter README](../Adapters~/HarfBuzz/README.md). The core does not need it to use a delegate or render ordinary TMP glyphs.
+BurstWord does not ship a HarfBuzz adapter, native shaping binaries or C++ shaping
+sources. You choose and maintain any external library used by your callback or provider,
+including its licensing and target-platform integration. A managed implementation can
+use the same interface without native files. Ordinary TMP glyph-data rendering does
+not require a shaping provider.

@@ -1,8 +1,0 @@
-HarfBuzzSharp.NativeAssets.Win32, macOS, Linux and Android 8.3.1.5.
-Native HarfBuzz version: 8.3.1.
-https://github.com/mono/SkiaSharp/tree/f568ac94dd768ef9a2f593537cfde2dd0d348ef5
-Downloaded from NuGet official flat-container endpoints.
-Exact package members and binary SHA-256 hashes: NATIVE_MANIFEST.json.
-Apple and WebGL: upstream HarfBuzz 8.3.1 amalgamation sources, compiled with the target toolchain.
-https://github.com/harfbuzz/harfbuzz/tree/2b3631a866b3077d9d675caa4ec9010b342b5a7c
-Source license: HarfBuzzSource~/COPYING. Original copyright headers retained.

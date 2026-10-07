@@ -21,3 +21,7 @@ BenchmarkReports/
 *.pdb
 .DS_Store
 Thumbs.db
+
+# Local-only shaping adapters; the package exposes integration interfaces.
+/Adapters~/
+/Adapters~.meta

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the bundled optional HarfBuzz adapter, native binaries and C++ sources from the current repository contents. Retain optional shaping callback and advanced Job-provider interfaces. Consolidate installation and usage documentation in README and retain the shader/shaping contracts for extension authors.
+
 - Add indexed Shader Effects and per-label effectParameters to numeric, text, spatial and batch emissions. Create user-owned dual-backend shaders from the Inspector or Assets menu; shared HLSL exposes final vertex/pixel hooks while preserving TMP rendering, space, animation and depth handling. Validate backend tags, instancing variants, properties and passes; reject unsupported effects explicitly. Reuse layout/Job caches, retain whole-label ordering across shader changes, and add shader selection/parameters to the isolated layout preview. Document the complete advanced shader ABI.
 
 - Expose built-in Rise Height under Animations; explain that empty lists/slots use it and speed is height divided by the per-emission duration. Preserve existing serialized height values and GPU motion.
