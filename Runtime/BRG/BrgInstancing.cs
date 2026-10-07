@@ -12,7 +12,7 @@ namespace BurstWord.BRG
         public RenderBackend ActiveBackend { get; private set; }
         public string BackendReason { get; private set; }
         private bool UsingBrg => ActiveBackend == RenderBackend.BRG;
-        // Ten float4 properties fit within the 16 KB uniform-block minimum of WebGL 2.
+        // Eleven float4 properties plus matrices fit within the 16 KB uniform-block minimum of WebGL 2.
         private const int InstancingBatchSize = 64;
         private MaterialPropertyBlock instanceProperties;
         private Material instancingMaterial;
@@ -23,7 +23,7 @@ namespace BurstWord.BRG
             Shader.PropertyToID("_AtlasRect"), Shader.PropertyToID("_LifeMotion"),
             Shader.PropertyToID("_Tint"), Shader.PropertyToID("_GlyphStyle"),
             Shader.PropertyToID("_BurstPoseAnchor"), Shader.PropertyToID("_BurstPoseRight"),
-            Shader.PropertyToID("_BurstPoseUp"), Shader.PropertyToID("_BurstAnimationLabel")
+            Shader.PropertyToID("_BurstPoseUp"), Shader.PropertyToID("_BurstAnimationLabel"), Shader.PropertyToID("_BurstEffectParameters")
         };
         private static readonly int[] ResourcePropertyIds = {
             Shader.PropertyToID("_BurstResource0"), Shader.PropertyToID("_BurstResource1"),
@@ -55,7 +55,7 @@ namespace BurstWord.BRG
         {
             instanceProperties = new MaterialPropertyBlock();
             instancingMaterial = new Material(glyphShader) { name = "BurstWord shared instancing material", enableInstancing = true, hideFlags = HideFlags.HideAndDontSave };
-            instanceValues = new Vector4[10][];
+            instanceValues = new Vector4[11][];
             for (int i = 0; i < instanceValues.Length; i++) instanceValues[i] = new Vector4[InstancingBatchSize];
             instanceMatrices = new Matrix4x4[InstancingBatchSize];
         }
@@ -131,6 +131,7 @@ namespace BurstWord.BRG
                     for (int field = 0; field < 6; field++) instanceValues[field][count] = page.values[field][item.slot];
                     for (int field = 0; field < 3; field++) instanceValues[field + 6][count] = labelValues[field][id];
                     instanceValues[9][count] = animationLabels[id];
+                    if (page.Material.shader != glyphShader) instanceValues[10][count] = effectLabels[id];
                     // Position the engine's group bounds at the animated label center. The shader uses explicit poses.
                     instanceMatrices[count] = Matrix4x4.Translate(sortedLabels[i].position);
                     count++;
@@ -143,13 +144,15 @@ namespace BurstWord.BRG
             // Use one material across all resource segments, including A -> B -> A.
             // Changing materials can regroup equal-depth transparent segments by state.
             page.BindInstancedResource(instanceProperties, resource);
-            for (int field = 0; field < instanceValues.Length; field++)
+            var material = InstancingEffectMaterial(page);
+            int fields = material.shader == glyphShader ? 10 : 11;
+            for (int field = 0; field < fields; field++)
                 instanceProperties.SetVectorArray(InstancePropertyIds[field], instanceValues[field]);
-            if (command.IsOverlay) command.Draw(quad, instancingMaterial, instanceMatrices, count, instanceProperties);
-            else Graphics.DrawMeshInstanced(quad, 0, instancingMaterial, instanceMatrices, count, instanceProperties,
+            if (command.IsOverlay) command.Draw(quad, material, instanceMatrices, count, instanceProperties);
+            else Graphics.DrawMeshInstanced(quad, 0, material, instanceMatrices, count, instanceProperties,
                 ShadowCastingMode.Off, false, gameObject.layer, worldCamera, LightProbeUsage.Off);
             DrawCommandCount++; SubmittedGlyphCount += count;
-            UploadedBytesLastFrame += count * (10 * 16 + 64); UploadCallsLastFrame++;
+            UploadedBytesLastFrame += count * (fields * 16 + 64); UploadCallsLastFrame++;
         }
     }
 }

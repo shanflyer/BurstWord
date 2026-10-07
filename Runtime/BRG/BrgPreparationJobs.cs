@@ -41,7 +41,8 @@ namespace BurstWord.BRG
             public TextPose Pose;
             public float WrapWidth, HorizontalDrift, Duration;
             public BrgTextAnimation Animation;
-            public int AnimationIndex;
+            public int AnimationIndex, EffectIndex;
+            public Vector4 EffectParameters;
             public float AnimationAmplitude;
             public bool UseLegacyAnimation;
             public TMP_FontAsset Font;
@@ -59,13 +60,14 @@ namespace BurstWord.BRG
                 float horizontalDrift = 0, float duration = 1.5f, Transform target = null,
                 BrgTextAnimation animation = null, float animationAmplitude = 1, bool useLegacyAnimation = false,
                 TMP_FontAsset font = null, int fontSize = 0,
-                TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
+                TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0, int effectIndex = 0, Vector4 effectParameters = default)
             {
                 Text = text; Color = color; Pose = pose; Target = target; WrapWidth = wrapWidth;
                 HorizontalDrift = horizontalDrift; Duration = duration;
                 Animation = animation; AnimationIndex = animationIndex; AnimationAmplitude = animationAmplitude; UseLegacyAnimation = useLegacyAnimation;
                 Font = font; FontIndex = fontIndex; FontSize = fontSize;
                 Alignment = alignment; TextAreaSize = textAreaSize;
+                EffectIndex = effectIndex; EffectParameters = effectParameters;
             }
         }
 
@@ -245,6 +247,7 @@ namespace BurstWord.BRG
             for (int i = 0; i < count; i++)
             {
                 ValidateDuration(requests[i].Duration);
+                ResolveEffect(requests[i].EffectIndex, requests[i].EffectParameters);
                 if (requests[i].Font == null) GetFont(requests[i].FontIndex);
                 ResolveAnimation(requests[i].Animation, requests[i].AnimationIndex, requests[i].UseLegacyAnimation);
             }
@@ -263,7 +266,7 @@ namespace BurstWord.BRG
                         var request = requests[i]; wrapWidth = request.WrapWidth;
                         var handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.Duration,
                             ResolveAnimation(request.Animation, request.AnimationIndex, request.UseLegacyAnimation), request.AnimationAmplitude, true,
-                            request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex);
+                            request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex, request.EffectIndex, request.EffectParameters);
                         if (handles != null) handles[i] = handle;
                     }
                     return;
@@ -360,7 +363,7 @@ namespace BurstWord.BRG
                         reusedBatchMeasurementOffset = queued.measurement;
                         try { handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.Duration,
                             ResolveAnimation(request.Animation, request.AnimationIndex, request.UseLegacyAnimation), request.AnimationAmplitude, true,
-                            request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex); }
+                            request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex, request.EffectIndex, request.EffectParameters); }
                         finally { reusedBatchMeasurement = null; }
                     }
                     else
@@ -379,7 +382,7 @@ namespace BurstWord.BRG
                         LastLayoutLineCount = queued.lines; LastLayoutSize = queued.size;
                         LastGlyphSubstitutionCount = queued.substitutions; LastLayoutUsedShaping = queued.shaping;
                         handle = CommitSpatial(request.Target, request.Pose, request.HorizontalDrift, request.Duration,
-                            preparationOutput, queued.output, queued.count, ResolveAnimation(request.Animation, request.AnimationIndex, request.UseLegacyAnimation), request.AnimationAmplitude);
+                            preparationOutput, queued.output, queued.count, ResolveAnimation(request.Animation, request.AnimationIndex, request.UseLegacyAnimation), request.AnimationAmplitude, ResolveEffect(request.EffectIndex, request.EffectParameters), request.EffectParameters);
                     }
                     if (handles != null) handles[i] = handle;
                 }

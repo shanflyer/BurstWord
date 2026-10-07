@@ -10,7 +10,7 @@ namespace BurstWord.Baseline.Editor
     public sealed class BrgRendererInspector : UnityEditor.Editor
     {
         private const string SectionKey = "BurstWord.RendererInspector.";
-        private ReorderableList fontList, animationList;
+        private ReorderableList fontList, animationList, effectList;
         private float lastWrapWidth = 400;
         private bool resourceChanges;
 
@@ -30,6 +30,7 @@ namespace BurstWord.Baseline.Editor
                 int index = list.serializedProperty.arraySize++;
                 list.serializedProperty.GetArrayElementAtIndex(index).objectReferenceValue = null;
             };
+            ConfigureEffectList();
             animationList = new ReorderableList(serializedObject, serializedObject.FindProperty("animations"), true, true, true, true);
             animationList.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Animations (index 0 = default)");
             animationList.drawElementCallback = (rect, index, active, focused) =>
@@ -44,6 +45,34 @@ namespace BurstWord.Baseline.Editor
                         BrgAnimationEditor.Open((BrgTextAnimation)property.objectReferenceValue, renderer);
             };
             animationList.onAddCallback = list =>
+            {
+                int index = list.serializedProperty.arraySize++;
+                list.serializedProperty.GetArrayElementAtIndex(index).objectReferenceValue = null;
+            };
+        }
+
+        private void ConfigureEffectList()
+        {
+            effectList = new ReorderableList(serializedObject, serializedObject.FindProperty("shaderEffects"), true, true, true, true);
+            effectList.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Shader Effects (index 0 = default)");
+            effectList.elementHeight = EditorGUIUtility.singleLineHeight * 2 + 10;
+            effectList.drawElementCallback = (rect, index, active, focused) =>
+            {
+                rect.y += 2; rect.height = EditorGUIUtility.singleLineHeight;
+                var property = effectList.serializedProperty.GetArrayElementAtIndex(index);
+                var edit = new Rect(rect.xMax - 45, rect.y, 45, rect.height); rect.width -= 51;
+                DrawIndexedAsset(rect, property, index, "Empty uses the built-in shader.");
+                var shader = property.objectReferenceValue as Shader;
+                using (new EditorGUI.DisabledScope(shader == null))
+                    if (GUI.Button(edit, "Edit")) AssetDatabase.OpenAsset(shader);
+                rect.y += EditorGUIUtility.singleLineHeight + 3; rect.width += 51;
+                var report = BrgShaderEffectCreator.Report(shader);
+                var style = new GUIStyle(EditorStyles.miniLabel);
+                if (report.type == MessageType.Error) style.normal.textColor = new Color(1, .3f, .3f);
+                else if (report.type == MessageType.Warning) style.normal.textColor = new Color(1, .65f, .15f);
+                EditorGUI.LabelField(rect, new GUIContent(report.text, report.text), style);
+            };
+            effectList.onAddCallback = list =>
             {
                 int index = list.serializedProperty.arraySize++;
                 list.serializedProperty.GetArrayElementAtIndex(index).objectReferenceValue = null;
@@ -101,6 +130,24 @@ namespace BurstWord.Baseline.Editor
                 EditorGUILayout.LabelField("Built-in Motion", EditorStyles.boldLabel);
                 Field("risePixels", "Rise Height", "Total upward travel in layout units for built-in motion. Negative values move downward. Captured on emission; does not change animation asset curves.");
                 EditorGUILayout.LabelField("Empty lists / slots use built-in motion. Speed = Rise Height / duration.", EditorStyles.wordWrappedMiniLabel);
+                EndSection();
+            }
+            if (BeginSection("effects", "Shader Effects"))
+            {
+                using (new EditorGUI.DisabledScope(Application.isPlaying)) effectList.DoLayoutList();
+                EditorGUILayout.LabelField("Empty lists / slots use built-in shading. effectIndex: -1 always selects built-in.", EditorStyles.wordWrappedMiniLabel);
+                using (new EditorGUI.DisabledScope(Application.isPlaying))
+                    if (GUILayout.Button("Create Custom Effect Shader"))
+                    {
+                        serializedObject.ApplyModifiedProperties();
+                        BrgShaderEffectCreator.CreateAndAssign(renderer);
+                        serializedObject.Update();
+                    }
+                foreach (var shader in renderer.shaderEffects ?? System.Array.Empty<Shader>())
+                {
+                    var report = BrgShaderEffectCreator.Report(shader);
+                    if (report.type == MessageType.Error || report.type == MessageType.Warning) EditorGUILayout.HelpBox(report.text, report.type);
+                }
                 EndSection();
             }
             serializedObject.ApplyModifiedProperties();

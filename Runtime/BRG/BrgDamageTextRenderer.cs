@@ -56,7 +56,7 @@ namespace BurstWord.BRG
             public float end, birth, duration, units, rise, drift;
             public int head, tail, activeIndex;
             public int firstGlyphSlot, glyphCount;
-            public bool contiguousGlyphs;
+            public bool contiguousGlyphs, customEffect;
             public bool active;
             public SpaceMode space;
             public Transform target;
@@ -173,14 +173,14 @@ namespace BurstWord.BRG
 
         public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0, int effectIndex = 0, Vector4 effectParameters = default)
         {
             ValidateDuration(duration);
             if (!isActiveAndEnabled || !IsInitialized) return false;
             if (freeLabelCount == 0) { DroppedCount++; return false; }
             // Keep the same integer-to-string work as the baseline for this first comparison.
             return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift,
-                duration, animation, animationAmplitude, font, fontSize, useLegacyAnimation, alignment, textAreaSize, fontIndex, animationIndex);
+                duration, animation, animationAmplitude, font, fontSize, useLegacyAnimation, alignment, textAreaSize, fontIndex, animationIndex, effectIndex, effectParameters);
         }
 
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float duration)
@@ -188,10 +188,10 @@ namespace BurstWord.BRG
 
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0, int effectIndex = 0, Vector4 effectParameters = default)
             => EmitSpatial(text, color, null, new TextPose(worldPosition, Quaternion.identity, Vector3.one),
                 horizontalDrift, duration, ResolveAnimation(animation, animationIndex, useLegacyAnimation),
-                animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex).IsAlive;
+                animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex, effectIndex, effectParameters).IsAlive;
 
         private bool BuildBasicLayout(string text, Color color)
         {
@@ -353,6 +353,7 @@ namespace BurstWord.BRG
             UpdateSpatial();
             UploadedBytesLastFrame = 0;
             UploadCallsLastFrame = 0;
+            UpdateEffects();
             using (UploadMarker.Auto())
                 foreach (var batch in glyphPages)
                 {
@@ -395,6 +396,7 @@ namespace BurstWord.BRG
             DisposeSpatial();
             DisposeAnimations();
             DisposeInstancing();
+            DisposeEffects();
             if (brg != null) { brg.Dispose(); brg = null; }
             DestroyGeneratedObject(quad); quad = null;
             labels = null; freeLabels = null; links = null; freeLinks = null;
@@ -414,14 +416,15 @@ namespace BurstWord.BRG
             public readonly TMP_FontAsset Font;
             public readonly Texture Texture;
             public readonly Material SourceMaterial;
+            public readonly int Mode;
             public readonly GlyphPage Page;
             public readonly int Resource;
             public AtlasBatch(BrgDamageTextRenderer renderer, Shader shader, TMP_FontAsset font, Texture texture, Material source, int mode)
             {
-                Font=font; Texture=texture; SourceMaterial=source;
+                Font=font; Texture=texture; SourceMaterial=source; Mode=mode;
                 foreach(var candidate in renderer.glyphPages)
-                    if(candidate.CanBind(texture)) { Page=candidate; break; }
-                if(Page==null) { Page=new GlyphPage(renderer); renderer.glyphPages.Add(Page); }
+                    if(candidate.Material.shader == shader && candidate.CanBind(texture)) { Page=candidate; break; }
+                if(Page==null) { Page=new GlyphPage(renderer, shader); renderer.glyphPages.Add(Page); }
                 Resource=Page.AddResource(texture,source,mode);
             }
             public void Dispose() { } // Page lifetime is owned by the renderer.
@@ -454,10 +457,10 @@ namespace BurstWord.BRG
             }
             private GraphicsBuffer resourceBuffer;
             private int resourceCapacity;
-            public GlyphPage(BrgDamageTextRenderer renderer)
+            public GlyphPage(BrgDamageTextRenderer renderer, Shader shader)
             {
                 owner = renderer.brg; Index = renderer.glyphPages.Count;
-                Material = new Material(renderer.glyphShader) { name = "BurstWord shared glyph page " + Index, enableInstancing = true, hideFlags = HideFlags.HideAndDontSave };
+                Material = new Material(shader) { name = "BurstWord shared glyph page " + Index, enableInstancing = true, hideFlags = HideFlags.HideAndDontSave };
                 renderer.ConfigureSpatialMaterial(Material);
                 Grow(128);
             }

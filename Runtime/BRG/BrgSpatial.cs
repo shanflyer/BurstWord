@@ -138,6 +138,7 @@ namespace BurstWord.BRG
                 {
                     renderer.UpdateScreenParameters();
                     renderer.UpdateAnimations();
+                    renderer.UpdateEffects();
                     renderer.UpdateSpatial();
                     if (!renderer.UsingBrg && renderer.sortingMode == SortingMode.SceneTransparent)
                         renderer.DrawInstanced(null);
@@ -192,12 +193,12 @@ namespace BurstWord.BRG
         public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset = default,
             Quaternion? rotation = null, Vector3? scale = null, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0, int effectIndex = 0, Vector4 effectParameters = default)
         {
             if (target == null) return default;
             var local = new TextPose(Vector3.zero, rotation ?? Quaternion.identity, scale ?? Vector3.one, offset);
             return EmitSpatial(text, color, target, local, horizontalDrift, duration,
-                ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
+                ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex, effectIndex, effectParameters);
         }
         public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift, float duration,
             BrgTextAnimation animation, float animationAmplitude)
@@ -205,9 +206,9 @@ namespace BurstWord.BRG
 
         public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0, int effectIndex = 0, Vector4 effectParameters = default)
             => EmitSpatial(text, color, null, pose, horizontalDrift, duration,
-                ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
+                ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex, effectIndex, effectParameters);
 
         public bool IsAlive(TextHandle handle) => ReferenceEquals(handle.owner, this) && labels != null &&
             handle.index >= 0 && handle.index < labels.Length && labels[handle.index].active &&
@@ -235,9 +236,10 @@ namespace BurstWord.BRG
         private TextHandle EmitSpatial(string text, Color color, Transform target, TextPose pose, float drift, float duration,
             BrgTextAnimation animation = null, float amplitude = 1, bool resolvedAnimation = false,
             TMP_FontAsset selectedFont = null, int selectedSize = 0,
-            TextAnchor? selectedAlignment = null, Vector2? selectedTextArea = null, int fontIndex = 0)
+            TextAnchor? selectedAlignment = null, Vector2? selectedTextArea = null, int fontIndex = 0, int effectIndex = 0, Vector4 effectParameters = default)
         {
             ValidateDuration(duration);
+            var effectShader = ResolveEffect(effectIndex, effectParameters);
             using var appearance = new EmissionAppearanceScope(this, selectedFont, selectedSize, selectedAlignment, selectedTextArea, fontIndex);
             using (preparingBatch ? default(Unity.Profiling.ProfilerMarker.AutoScope) : GenerateMarker.Auto())
             {
@@ -247,22 +249,25 @@ namespace BurstWord.BRG
                 using (LayoutMarker.Auto()) built = BuildLayout(text, color);
                 if (!built) { FailedLayoutCount++; return default; }
                 return CommitSpatial(target, pose, drift, duration, default, 0, layout.Count,
-                    resolvedAnimation ? animation : animation ?? GetAnimation(0), amplitude);
+                    resolvedAnimation ? animation : animation ?? GetAnimation(0), amplitude, effectShader, effectParameters);
             }
         }
         private unsafe TextHandle CommitSpatial(Transform target, TextPose pose, float drift, float duration,
-            NativeArray<PreparedGlyph> prepared, int first, int count, BrgTextAnimation animation = null, float amplitude = 1)
+            NativeArray<PreparedGlyph> prepared, int first, int count, BrgTextAnimation animation = null, float amplitude = 1, Shader effectShader = null, Vector4 effectParameters = default)
         {
                 CompleteVisibilityWork();
                 using var instancesScope = InstancesMarker.Auto();
                 int id = freeLabels[--freeLabelCount];
                 float birth = Now;
+                effectShader = effectShader != null ? effectShader : glyphShader;
+                bool customEffect = effectShader != glyphShader;
+                SetEffectParameters(id, effectParameters, customEffect);
                 var label = new Label { active = true, end = birth + duration, birth = birth, duration = duration,
                     head = -1, tail = -1, firstGlyphSlot = -1, contiguousGlyphs = true, space = spaceMode, pose = pose,
                     target = spaceMode == SpaceMode.ScreenSnapshot ? null : target,
                     units = Mathf.Max(0.000001f, worldUnitsPerLayoutUnit), rise = risePixels, drift = drift,
                     generation = ++labelGeneration, order = ++labelSequence, activeIndex = ActiveCount,
-                    previousFollow=-1, nextFollow=-1 };
+                    previousFollow=-1, nextFollow=-1, customEffect=customEffect };
                 label.localMatrix = PoseMatrix(null, pose);
                 Matrix4x4 targetMatrix = target != null ? target.localToWorldMatrix : Matrix4x4.identity;
                 labels[id] = label;
@@ -274,12 +279,17 @@ namespace BurstWord.BRG
                 bool batchedWrite = queueInstanceWrites && prepared.IsCreated;
                 var preparedPointer = prepared.IsCreated ? (PreparedGlyph*)prepared.GetUnsafeReadOnlyPtr() + first : null;
                 if (batchedWrite) instanceLabelWrites[instanceWriteCount++] = new InstanceLabelWrite { first = first, count = count, label = id, anchor = anchor, motion = motion };
+                // Remap only this request's worker output, never shared preparation templates.
+                if (customEffect && preparedPointer != null)
+                    for (int i = 0; i < count; i++) preparedPointer[i].group = EffectBatch(preparedPointer[i].group, effectShader);
                 int runEnd = 0, runSlot = 0;
                 for (int glyphIndex = 0; glyphIndex < count; glyphIndex++)
                 {
                     var placed = batchedWrite ? default : preparedPointer != null ? preparedPointer[glyphIndex] : PreparedGlyph.From(layout[glyphIndex]);
                     int linkId = AllocateLink();
-                    var group = atlasBatches[batchedWrite ? preparedPointer[glyphIndex].group : placed.group];
+                    int groupIndex = batchedWrite ? preparedPointer[glyphIndex].group : placed.group;
+                    if (customEffect && preparedPointer == null) groupIndex = EffectBatch(groupIndex, effectShader);
+                    var group = atlasBatches[groupIndex];
                     var style = placed.style; style.w = id + 1;
                     anchor.x = group.Resource;
                     int slot;
@@ -288,7 +298,13 @@ namespace BurstWord.BRG
                         if (glyphIndex == runEnd)
                         {
                             runEnd = glyphIndex + 1;
-                            while (runEnd < count && atlasBatches[preparedPointer != null ? preparedPointer[runEnd].group : layout[runEnd].glyph.group].Page == group.Page) runEnd++;
+                            while (runEnd < count)
+                            {
+                                int next = preparedPointer != null ? preparedPointer[runEnd].group : layout[runEnd].glyph.group;
+                                if (customEffect && preparedPointer == null) next = EffectBatch(next, effectShader);
+                                if (atlasBatches[next].Page != group.Page) break;
+                                runEnd++;
+                            }
                             runSlot = group.Page.ReserveRange(runEnd - glyphIndex);
                         }
                         slot = runSlot >= 0 ? runSlot++ : group.Page.ReserveSlot();
@@ -471,6 +487,7 @@ namespace BurstWord.BRG
         private void ConfigureSpatialMaterial(Material material)
         {
             BindAnimation(material);
+            BindEffect(material);
             bool scene = sortingMode == SortingMode.SceneTransparent;
             if (labelBuffer != null) material.SetBuffer("_BurstLabels", labelBuffer);
             material.SetInt("_BurstLabelCapacity", labels.Length);
@@ -698,8 +715,12 @@ namespace BurstWord.BRG
                 using (SortMarker.Auto()) SortLabels();
                 using var visibleScope = VisibleMarker.Auto();
                 bool scene = sortingMode == SortingMode.SceneTransparent;
-                int commandCount = glyphPages.Count == 1 ? (scene ? sortedCount : 1) : 0, previousGroup = -1;
-                for (int i = 0; glyphPages.Count > 1 && i < sortedCount; i++)
+                // Unused layout-resource pages must not disable the single-page Job path.
+                GlyphPage singlePage = null;
+                foreach (var page in glyphPages)
+                    if (page.Count > 0) { if (singlePage != null) { singlePage = null; break; } singlePage = page; }
+                int commandCount = singlePage != null ? (scene ? sortedCount : 1) : 0, previousGroup = -1;
+                for (int i = 0; singlePage == null && i < sortedCount; i++)
                 {
                     if (scene) previousGroup = -1;
                     for (int link = labels[sortedLabels[i].id].head; link >= 0; link = links[link].next)
@@ -719,10 +740,10 @@ namespace BurstWord.BRG
                 commands->visibleInstanceCount = ActiveGlyphCount;
                 int draw = -1, offset = 0; previousGroup = -1;
                 JobHandle visibleJob = default;
-                if (glyphPages.Count == 1 && useContiguousIndexFastPath)
+                if (singlePage != null && useContiguousIndexFastPath)
                 {
                     var spans = useVisibleIndexJobs ? new NativeArray<VisibleSpan>(sortedCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory) : default;
-                    var batch = glyphPages[0];
+                    var batch = singlePage;
                     var template = new BatchDrawCommand { batchID = batch.BatchId, materialID = batch.MaterialId,
                         meshID = meshId, submeshIndex = 0, splitVisibilityMask = 0xff,
                         flags = scene ? BatchDrawCommandFlags.HasSortingPosition : BatchDrawCommandFlags.None };

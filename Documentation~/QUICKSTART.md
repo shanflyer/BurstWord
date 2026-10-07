@@ -211,3 +211,17 @@ void ShapeText(in TextShapingRequest input, List<TextShapingGlyph> output)
 ```
 
 上面的空方法只是接口位置，必须实际填写输出后才能显示字形。输出包含字体内的 GlyphId、原文 UTF-32 Cluster、Advance 和 OffsetX/OffsetY。完整约定见 [SHAPING.md](SHAPING.md)。委托在主线程处理需要塑形的文本段，重复请求可以使用缓存；更换委托或其内部设置后重新注册，会清除当前飘字和旧缓存。
+
+## 自定义 Shader 效果
+
+打开管理器的 **Shader Effects**，点击 **Create Custom Effect Shader**，将模板保存到项目的 Assets 中。它会自动加入列表。点击行内 **Edit**，在生成的 Shader 中修改 `BurstWordModifyVertex` 和 `BurstWordModifyFragment` 两个函数；底层的字形、空间、TMP 效果和动画由包内共享 HLSL 处理。
+
+```csharp
+renderer.EmitText(position, "暴击 1234", Color.white,
+    effectIndex: 0,
+    effectParameters: new Vector4(1, 0.5f, 0, 3));
+```
+
+`effectIndex: 0` 使用列表第一项，空列表或空项使用内置 Shader。`effectIndex: -1` 可以明确使用内置 Shader。`effectParameters` 是每条飘字独立的四个数值，含义由你的效果函数定义，默认全零。数字、Transform、TextPose 和批量发射接口均支持这两个参数。
+
+模板同时支持 BRG 和 Instancing；高级开发者可以实现完整 Shader，但必须遵守数据、Pass 和后端声明规范。不兼容的 Shader 会在 Inspector 中显示原因，发射时也会明确拒绝。**Open Layout Preview** 可以选择 Shader 和输入参数查看静态效果。完整教程和规范见 [SHADER_EFFECTS.md](SHADER_EFFECTS.md)。

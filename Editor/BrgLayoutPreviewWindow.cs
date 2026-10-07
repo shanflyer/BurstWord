@@ -20,6 +20,8 @@ namespace BurstWord.Baseline.Editor
         [SerializeField] private string text = "Critical 12345\nPreview text: change the width to see automatic wrapping.";
         [SerializeField] private Color textColor = Color.white;
         [SerializeField] private int fontIndex;
+        [SerializeField] private int effectIndex;
+        [SerializeField] private Vector4 effectParameters;
         [SerializeField] private bool autoFit = true;
         [SerializeField] private float zoom = 1;
         [SerializeField] private Vector2 pan;
@@ -73,7 +75,7 @@ namespace BurstWord.Baseline.Editor
         private void SetSource(BrgDamageTextRenderer value)
         {
             if (source == value && preview != null) return;
-            source = value; fontIndex = 0; pan = Vector2.zero;
+            source = value; fontIndex = effectIndex = 0; effectParameters = Vector4.zero; pan = Vector2.zero;
             if (source != null && source.wrapWidth > 0) lastWrapWidth = source.wrapWidth;
             DisposePreview(); Invalidate();
         }
@@ -110,6 +112,7 @@ namespace BurstWord.Baseline.Editor
                 Add(asset.material);
                 if (asset.fallbackSpriteAssets != null) foreach (var fallback in asset.fallbackSpriteAssets) Sprite(fallback);
             }
+            if (source.shaderEffects != null) foreach (var shader in source.shaderEffects) Add(shader);
             Font(source.font);
             if (source.fonts != null) foreach (var font in source.fonts) Font(font);
             if (TMP_Settings.fallbackFontAssets != null) foreach (var font in TMP_Settings.fallbackFontAssets) Font(font);
@@ -157,6 +160,16 @@ namespace BurstWord.Baseline.Editor
                 var names = new string[count]; names[0] = "[0] " + (source.font != null ? source.font.name : "Default (unassigned)");
                 for (int i = 1; i < count; i++) names[i] = "[" + i + "] " + (source.fonts[i - 1] != null ? source.fonts[i - 1].name : "Empty");
                 fontIndex = EditorGUILayout.Popup("Preview Font", Mathf.Clamp(fontIndex, 0, count - 1), names);
+                int effectCount = source.shaderEffects?.Length ?? 0;
+                if (effectCount > 0)
+                {
+                    var effects = new string[effectCount + 1]; effects[0] = "Built-in";
+                    for (int i = 0; i < effectCount; i++) effects[i + 1] = "[" + i + "] " + (source.shaderEffects[i] != null ? source.shaderEffects[i].name : "Built-in");
+                    effectIndex = EditorGUILayout.Popup("Preview Shader", Mathf.Clamp(effectIndex + 1, 0, effectCount), effects) - 1;
+                    if (effectIndex >= 0 && source.shaderEffects[effectIndex] != null)
+                        effectParameters = EditorGUILayout.Vector4Field("Effect Parameters", effectParameters);
+                }
+                else effectIndex = 0;
                 if (EditorGUI.EndChangeCheck()) { dirty = true; error = null; }
                 EditorGUILayout.Space(8);
                 EditorGUILayout.LabelField("Manager Layout", EditorStyles.boldLabel);
@@ -214,6 +227,7 @@ namespace BurstWord.Baseline.Editor
                     EnsurePreview();
                     if (dirty)
                     {
+                        preview.SelectEffect(effectIndex, effectParameters);
                         preview.Measure(text, textColor, fontIndex);
                         dirty = false;
                     }
@@ -371,7 +385,8 @@ namespace BurstWord.Baseline.Editor
         private RenderTexture target;
         private string text;
         private Color color;
-        private int fontIndex;
+        private int fontIndex, effectIndex;
+        private Vector4 effectParameters;
         internal BrgDamageTextRenderer Renderer { get; private set; }
         internal Rect Bounds { get; private set; }
         internal bool HasBounds { get; private set; }
@@ -422,6 +437,9 @@ namespace BurstWord.Baseline.Editor
             catch { Dispose(); throw; }
         }
 
+        internal void SelectEffect(int index, Vector4 parameters)
+        { effectIndex = index; effectParameters = parameters; }
+
         internal void Measure(string content, Color tint, int selectedFont)
         {
             text = content; color = tint; fontIndex = selectedFont;
@@ -436,7 +454,7 @@ namespace BurstWord.Baseline.Editor
         {
             Renderer.Clear(); Renderer.ResetCounters(); Renderer.EditorPreviewFrame(0);
             if (!string.IsNullOrEmpty(text))
-                Renderer.EmitText(position, text, color, duration: 100, fontIndex: fontIndex, useLegacyAnimation: true);
+                Renderer.EmitText(position, text, color, duration: 100, fontIndex: fontIndex, useLegacyAnimation: true, effectIndex: effectIndex, effectParameters: effectParameters);
         }
 
         internal RenderTexture Render(Vector2 size, float zoom, Vector2 pan, float pixelsPerPoint)

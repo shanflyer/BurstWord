@@ -1,3 +1,5 @@
+#ifndef BURSTWORD_TMP_GLYPH_INCLUDED
+#define BURSTWORD_TMP_GLYPH_INCLUDED
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
@@ -26,6 +28,9 @@ SAMPLER(sampler_linear_clamp);
 ByteAddressBuffer _BurstLabels;
 StructuredBuffer<float4> _BurstResources;
 StructuredBuffer<float4> _BurstAnimationLabels;
+#if defined(BURSTWORD_CUSTOM_EFFECT)
+StructuredBuffer<float4> _BurstEffectLabels;
+#endif
 #endif
 TEXTURE2D(_BurstAnimationCurves);
 CBUFFER_START(UnityPerMaterial)
@@ -33,7 +38,9 @@ CBUFFER_START(UnityPerMaterial)
     float4 _BurstScreen;
     float4 _BurstAnimationInfo;
     float _BurstZTest, _BurstLabelCapacity, _BurstSortingMode, _BurstPlainSdfFastPath;
-#if defined(BURST_CLASSIC_INSTANCING)
+#if defined(BURST_CLASSIC_INSTANCING) || defined(BURSTWORD_CUSTOM_EFFECT)
+    // Combined user shaders keep this layout identical in DOTS and classic variants.
+    // BRG rejects a SubShader whose UnityPerMaterial size differs between variants.
     float4 _BurstResource0, _BurstResource1, _BurstResource2, _BurstResource3, _BurstResource4;
     float4 _BurstResource5, _BurstResource6, _BurstResource7, _BurstResource8, _BurstResource9;
 #endif
@@ -61,6 +68,9 @@ UNITY_INSTANCING_BUFFER_START(BurstGlyphs)
     UNITY_DEFINE_INSTANCED_PROP(float4, _BurstPoseRight)
     UNITY_DEFINE_INSTANCED_PROP(float4, _BurstPoseUp)
     UNITY_DEFINE_INSTANCED_PROP(float4, _BurstAnimationLabel)
+#if defined(BURSTWORD_CUSTOM_EFFECT)
+    UNITY_DEFINE_INSTANCED_PROP(float4, _BurstEffectParameters)
+#endif
 UNITY_INSTANCING_BUFFER_END(BurstGlyphs)
 #else
 #define BurstResource(index) _BurstResources[index]
@@ -112,6 +122,10 @@ struct Varyings
     nointerpolation float4 plainFace : TEXCOORD3;
     nointerpolation float plainThreshold : TEXCOORD4;
     nointerpolation uint plainAtlas : TEXCOORD5;
+#if defined(BURSTWORD_CUSTOM_EFFECT)
+    nointerpolation float4 effectParameters : TEXCOORD6;
+    float4 effectContext : TEXCOORD7; // glyph UV, normalized age, elapsed seconds
+#endif
 };
 Varyings Vert(Attributes input)
 {
@@ -144,6 +158,14 @@ Varyings Vert(Attributes input)
     output.resource = (uint)anchor.x;
 #endif
     uint label = (uint)max(0, style.w - 1);
+#if defined(BURSTWORD_CUSTOM_EFFECT)
+    output.effectContext = float4(input.uv, t, max(0, _BurstTime - anchor.w));
+#if defined(BURST_CLASSIC_INSTANCING)
+    output.effectParameters = UNITY_ACCESS_INSTANCED_PROP(BurstGlyphs, _BurstEffectParameters);
+#else
+    output.effectParameters = _BurstEffectLabels[label];
+#endif
+#endif
     float alpha = 1 - smoothstep(0.5, 1, t);
     [branch] if (_BurstAnimationInfo.x > 0.5)
     {
@@ -287,3 +309,5 @@ half4 Frag(Varyings input) : SV_Target
     }
     return half4(rgb / max(alpha, 0.0001), alpha * input.tint.a);
 }
+
+#endif

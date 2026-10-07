@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add indexed Shader Effects and per-label effectParameters to numeric, text, spatial and batch emissions. Create user-owned dual-backend shaders from the Inspector or Assets menu; shared HLSL exposes final vertex/pixel hooks while preserving TMP rendering, space, animation and depth handling. Validate backend tags, instancing variants, properties and passes; reject unsupported effects explicitly. Reuse layout/Job caches, retain whole-label ordering across shader changes, and add shader selection/parameters to the isolated layout preview. Document the complete advanced shader ABI.
+
 - Expose built-in Rise Height under Animations; explain that empty lists/slots use it and speed is height divided by the per-emission duration. Preserve existing serialized height values and GPU motion.
 
 - Add Text Layout → Open Layout Preview: editable text/color/font, shared live layout controls, fixed-area dimensions and resizing with Undo, actual glyph bounds, wrapping guides, auto fit and zoom/pan. Use an isolated editor-only preview scene and the real BurstWord layout/render path, including optional registered shaping, with no saved preview objects or Player overhead.
