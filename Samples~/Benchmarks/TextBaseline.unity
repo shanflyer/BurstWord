@@ -3264,7 +3264,6 @@ MonoBehaviour:
   font: {fileID: 0}
   worldCamera: {fileID: 492997423}
   fontSize: 28
-  lifetime: 1.5
   risePixels: 90
   referenceResolution: {x: 1920, y: 1080}
 --- !u!4 &171200570

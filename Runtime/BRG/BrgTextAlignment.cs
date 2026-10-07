@@ -39,5 +39,29 @@ namespace BurstWord.BRG
         private float HorizontalStart(float width) => HorizontalStart(width, LayoutAlignment, LayoutTextArea);
         private float VerticalOffset(float height) => VerticalOffset(height, LayoutAlignment, LayoutTextArea);
         private float BaselineOffset(float ascent, float descent) => VerticalOffset(ascent - descent) - ascent;
+
+#if UNITY_EDITOR
+        /// <summary>Allows isolated editor previews to create their own sessions from the same registered provider.</summary>
+        public BurstWord.Typography.ITextShaper EditorTextShaper => runtimeShaper;
+
+        /// <summary>Bounds of the last generated glyph quads, including font effect padding. Editor tooling only.</summary>
+        public bool EditorTryGetLayoutBounds(out Rect bounds)
+        {
+            bounds = default;
+            bool any = false;
+            for (int i = 0; i < layout.Count; i++)
+            {
+                var rect = layout[i].rect;
+                if (rect.z <= 0 || rect.w <= 0) continue;
+                var style = layout[i].style;
+                float bottomShear = style.y * style.z, topShear = style.y * (style.z + rect.w);
+                float left = rect.x + Mathf.Min(bottomShear, topShear), right = rect.x + rect.z + Mathf.Max(bottomShear, topShear);
+                if (!any) { bounds = Rect.MinMaxRect(left, rect.y, right, rect.y + rect.w); any = true; }
+                else bounds = Rect.MinMaxRect(Mathf.Min(bounds.xMin, left), Mathf.Min(bounds.yMin, rect.y),
+                    Mathf.Max(bounds.xMax, right), Mathf.Max(bounds.yMax, rect.y + rect.w));
+            }
+            return any;
+        }
+#endif
     }
 }

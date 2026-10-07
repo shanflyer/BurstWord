@@ -12,7 +12,6 @@ namespace BurstWord.Baseline
         public TMP_FontAsset font;
         public Camera worldCamera;
         [Min(1)] public int fontSize = 28;
-        [Min(0.01f)] public float lifetime = 1.5f;
         public float risePixels = 90;
         public Vector2 referenceResolution = new Vector2(1920, 1080);
 
@@ -85,17 +84,19 @@ namespace BurstWord.Baseline
             }
         }
 
-        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1)
+        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float duration = 1.5f)
         {
             using (EmitMarker.Auto())
             {
+                if (!(duration > 0) || float.IsInfinity(duration))
+                    throw new System.ArgumentOutOfRangeException(nameof(duration), "Duration must be finite and greater than zero (seconds).");
                 if (available == null || !isActiveAndEnabled || worldCamera == null) return false;
                 if (availableCount == 0) { DroppedCount++; return false; }
                 var item = available[--availableCount];
                 available[availableCount] = null;
                 item.ActiveIndex = ActiveCount;
                 active[ActiveCount++] = item;
-                item.Show(worldPosition, damage, color, Mathf.Max(0.01f, lifetime * durationScale), risePixels, horizontalDrift);
+                item.Show(worldPosition, damage, color, duration, risePixels, horizontalDrift);
                 EmittedCount++;
                 return true;
             }

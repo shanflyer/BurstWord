@@ -3060,7 +3060,6 @@ MonoBehaviour:
   glyphShader: {fileID: 4800000, guid: 890f1272ddd4e6a429988d6cb6629147, type: 3}
   worldCamera: {fileID: 492997423}
   fontSize: 28
-  lifetime: 1.5
   risePixels: 90
   animations:
   - {fileID: 0}

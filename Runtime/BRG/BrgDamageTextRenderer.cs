@@ -24,7 +24,6 @@ namespace BurstWord.BRG
         [HideInInspector] public Shader glyphShader;
         public Camera worldCamera;
         [Min(1)] public int fontSize = 28;
-        [Min(0.01f)] public float lifetime = 1.5f;
         [HideInInspector] public float risePixels = 90;
         public Vector2 referenceResolution = new Vector2(1920, 1080);
 
@@ -168,29 +167,30 @@ namespace BurstWord.BRG
             UpdateBounds();
         }
 
-        // Preserve the original public signature for precompiled callers and method groups.
-        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift, float durationScale)
-            => Emit(worldPosition, damage, color, horizontalDrift, durationScale, font: null);
+        // Five-argument overload for method groups; duration is now seconds.
+        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift, float duration)
+            => Emit(worldPosition, damage, color, horizontalDrift, duration, font: null);
 
-        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1,
+        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
             int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
         {
+            ValidateDuration(duration);
             if (!isActiveAndEnabled || !IsInitialized) return false;
             if (freeLabelCount == 0) { DroppedCount++; return false; }
             // Keep the same integer-to-string work as the baseline for this first comparison.
             return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift,
-                durationScale, animation, animationAmplitude, font, fontSize, useLegacyAnimation, alignment, textAreaSize, fontIndex, animationIndex);
+                duration, animation, animationAmplitude, font, fontSize, useLegacyAnimation, alignment, textAreaSize, fontIndex, animationIndex);
         }
 
-        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float durationScale)
-            => EmitText(worldPosition, text, color, horizontalDrift, durationScale, font: null);
+        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float duration)
+            => EmitText(worldPosition, text, color, horizontalDrift, duration, font: null);
 
-        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
+        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
             int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
             => EmitSpatial(text, color, null, new TextPose(worldPosition, Quaternion.identity, Vector3.one),
-                horizontalDrift, durationScale, ResolveAnimation(animation, animationIndex, useLegacyAnimation),
+                horizontalDrift, duration, ResolveAnimation(animation, animationIndex, useLegacyAnimation),
                 animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex).IsAlive;
 
         private bool BuildBasicLayout(string text, Color color)

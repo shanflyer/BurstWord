@@ -31,6 +31,7 @@ namespace BurstWord.BRG
         /// <summary>Font/FontIndex, FontSize and Animation/AnimationIndex can override the manager per request.
         /// Font takes priority; otherwise FontIndex 0 selects the default and 1..N the font list.
         /// A target pose is local to Target; a pose without Target is in world space.
+        /// Duration is the positive lifetime in seconds (default 1.5), independent of animation clip length.
         /// WrapWidth is per request. Requests are committed in input order in this frame.</summary>
         public struct TextEmission
         {
@@ -38,7 +39,7 @@ namespace BurstWord.BRG
             public Color Color;
             public Transform Target;
             public TextPose Pose;
-            public float WrapWidth, HorizontalDrift, DurationScale;
+            public float WrapWidth, HorizontalDrift, Duration;
             public BrgTextAnimation Animation;
             public int AnimationIndex;
             public float AnimationAmplitude;
@@ -49,19 +50,19 @@ namespace BurstWord.BRG
             public TextAnchor? Alignment;
             public Vector2? TextAreaSize;
             public TextEmission(string text, Color color, TextPose pose, float wrapWidth,
-                float horizontalDrift, float durationScale, Transform target,
+                float horizontalDrift, float duration, Transform target,
                 BrgTextAnimation animation, float animationAmplitude, bool useLegacyAnimation)
-                : this(text, color, pose, wrapWidth, horizontalDrift, durationScale, target,
+                : this(text, color, pose, wrapWidth, horizontalDrift, duration, target,
                     animation, animationAmplitude, useLegacyAnimation, null, 0) { }
 
             public TextEmission(string text, Color color, TextPose pose, float wrapWidth = 0,
-                float horizontalDrift = 0, float durationScale = 1, Transform target = null,
+                float horizontalDrift = 0, float duration = 1.5f, Transform target = null,
                 BrgTextAnimation animation = null, float animationAmplitude = 1, bool useLegacyAnimation = false,
                 TMP_FontAsset font = null, int fontSize = 0,
                 TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
             {
                 Text = text; Color = color; Pose = pose; Target = target; WrapWidth = wrapWidth;
-                HorizontalDrift = horizontalDrift; DurationScale = durationScale;
+                HorizontalDrift = horizontalDrift; Duration = duration;
                 Animation = animation; AnimationIndex = animationIndex; AnimationAmplitude = animationAmplitude; UseLegacyAnimation = useLegacyAnimation;
                 Font = font; FontIndex = fontIndex; FontSize = fontSize;
                 Alignment = alignment; TextAreaSize = textAreaSize;
@@ -243,6 +244,7 @@ namespace BurstWord.BRG
             // Validate the whole range before committing any text.
             for (int i = 0; i < count; i++)
             {
+                ValidateDuration(requests[i].Duration);
                 if (requests[i].Font == null) GetFont(requests[i].FontIndex);
                 ResolveAnimation(requests[i].Animation, requests[i].AnimationIndex, requests[i].UseLegacyAnimation);
             }
@@ -259,7 +261,7 @@ namespace BurstWord.BRG
                     for (int i = 0; i < count; i++)
                     {
                         var request = requests[i]; wrapWidth = request.WrapWidth;
-                        var handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.DurationScale,
+                        var handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.Duration,
                             ResolveAnimation(request.Animation, request.AnimationIndex, request.UseLegacyAnimation), request.AnimationAmplitude, true,
                             request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex);
                         if (handles != null) handles[i] = handle;
@@ -356,7 +358,7 @@ namespace BurstWord.BRG
                         JobFallbackLastBatch++; JobFallbackCount++;
                         reusedBatchMeasurement = preparationResults[i].measured != 0 ? queued.template : null;
                         reusedBatchMeasurementOffset = queued.measurement;
-                        try { handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.DurationScale,
+                        try { handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.Duration,
                             ResolveAnimation(request.Animation, request.AnimationIndex, request.UseLegacyAnimation), request.AnimationAmplitude, true,
                             request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex); }
                         finally { reusedBatchMeasurement = null; }
@@ -376,7 +378,7 @@ namespace BurstWord.BRG
                         }
                         LastLayoutLineCount = queued.lines; LastLayoutSize = queued.size;
                         LastGlyphSubstitutionCount = queued.substitutions; LastLayoutUsedShaping = queued.shaping;
-                        handle = CommitSpatial(request.Target, request.Pose, request.HorizontalDrift, request.DurationScale,
+                        handle = CommitSpatial(request.Target, request.Pose, request.HorizontalDrift, request.Duration,
                             preparationOutput, queued.output, queued.count, ResolveAnimation(request.Animation, request.AnimationIndex, request.UseLegacyAnimation), request.AnimationAmplitude);
                     }
                     if (handles != null) handles[i] = handle;

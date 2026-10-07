@@ -97,8 +97,10 @@ namespace BurstWord.Baseline.Editor
             if (BeginSection("animations", "Animations"))
             {
                 animationList.DoLayoutList();
-                if (animationList.serializedProperty.arraySize == 0)
-                    EditorGUILayout.LabelField("Empty list uses linear motion.", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.Space(4);
+                EditorGUILayout.LabelField("Built-in Motion", EditorStyles.boldLabel);
+                Field("risePixels", "Rise Height", "Total upward travel in layout units for built-in motion. Negative values move downward. Captured on emission; does not change animation asset curves.");
+                EditorGUILayout.LabelField("Empty lists / slots use built-in motion. Speed = Rise Height / duration.", EditorStyles.wordWrappedMiniLabel);
                 EndSection();
             }
             serializedObject.ApplyModifiedProperties();
@@ -113,7 +115,6 @@ namespace BurstWord.Baseline.Editor
             EditorGUI.BeginChangeCheck();
             Field("worldCamera", "Camera", "Leave empty to use Camera.main on initialization.");
             resourceChanges |= EditorGUI.EndChangeCheck();
-            Field("lifetime", "Lifetime (seconds)");
             using (new EditorGUI.DisabledScope(Application.isPlaying))
                 Field("capacity", "Maximum Live Labels", "Maximum simultaneous messages. Configure before Play.");
             DrawPipeline();
@@ -149,9 +150,20 @@ namespace BurstWord.Baseline.Editor
 
         private void DrawTextLayout()
         {
-            DrawAlignment();
+            resourceChanges |= DrawLayoutControls(serializedObject, ref lastWrapWidth);
+            EditorGUILayout.Space(6);
+            if (GUILayout.Button("Open Layout Preview"))
+            {
+                serializedObject.ApplyModifiedProperties();
+                BrgLayoutPreviewWindow.Open((BrgDamageTextRenderer)target);
+            }
+        }
+
+        internal static bool DrawLayoutControls(SerializedObject settings, ref float lastWrapWidth)
+        {
+            DrawAlignment(settings);
             EditorGUILayout.Space(4);
-            var width = serializedObject.FindProperty("wrapWidth");
+            var width = settings.FindProperty("wrapWidth");
             bool wrapping = width.floatValue > 0;
             bool selected = EditorGUILayout.Toggle("Automatic Wrapping", wrapping);
             if (selected != wrapping)
@@ -162,19 +174,20 @@ namespace BurstWord.Baseline.Editor
             if (selected)
             {
                 using (new EditorGUI.IndentLevelScope())
-                    Field("wrapWidth", "Wrap Width", "Maximum line width in layout units. An enabled fixed text area can reduce this to its width.");
+                    EditorGUILayout.PropertyField(width, new GUIContent("Wrap Width", "Maximum line width in layout units. An enabled fixed text area can reduce this to its width."));
                 width.floatValue = Mathf.Max(1, width.floatValue);
                 lastWrapWidth = width.floatValue;
             }
             EditorGUILayout.Space(4);
             EditorGUI.BeginChangeCheck();
-            Field("richText", "Rich Text Tags"); Field("enableKerning", "Font Kerning");
-            resourceChanges |= EditorGUI.EndChangeCheck();
+            EditorGUILayout.PropertyField(settings.FindProperty("richText"), new GUIContent("Rich Text Tags"));
+            EditorGUILayout.PropertyField(settings.FindProperty("enableKerning"), new GUIContent("Font Kerning"));
+            return EditorGUI.EndChangeCheck();
         }
 
-        private void DrawAlignment()
+        private static void DrawAlignment(SerializedObject settings)
         {
-            var anchor = serializedObject.FindProperty("alignment");
+            var anchor = settings.FindProperty("alignment");
             int horizontal = anchor.enumValueIndex % 3, vertical = anchor.enumValueIndex / 3;
             EditorGUILayout.BeginHorizontal(); EditorGUILayout.PrefixLabel("Horizontal");
             horizontal = GUILayout.Toolbar(horizontal, new[] { "Left", "Center", "Right" });
@@ -183,10 +196,15 @@ namespace BurstWord.Baseline.Editor
             vertical = GUILayout.Toolbar(vertical, new[] { "Top", "Middle", "Bottom" });
             EditorGUILayout.EndHorizontal();
             anchor.enumValueIndex = vertical * 3 + horizontal;
-            Field("useTextArea", "Use Fixed Text Area", "Off: align against the emission point. On: align within an area centered on that point.");
-            if (serializedObject.FindProperty("useTextArea").boolValue)
+            var area = settings.FindProperty("useTextArea");
+            EditorGUILayout.PropertyField(area, new GUIContent("Use Fixed Text Area", "Off: align against the emission point. On: align within an area centered on that point."));
+            if (area.boolValue)
                 using (new EditorGUI.IndentLevelScope())
-                    Field("textAreaSize", "Text Area Size", "Width / height in layout units, scaled with the text. This area does not clip overflowing text.");
+                {
+                    var size = settings.FindProperty("textAreaSize");
+                    EditorGUILayout.PropertyField(size, new GUIContent("Text Area Size", "Width / height in layout units, scaled with the text. This area does not clip overflowing text."));
+                    size.vector2Value = Vector2.Max(Vector2.zero, size.vector2Value);
+                }
         }
 
         private void DrawScreenScaling()

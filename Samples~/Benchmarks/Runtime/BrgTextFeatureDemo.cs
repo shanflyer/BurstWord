@@ -126,7 +126,7 @@ namespace BurstWord.BRG
                 int value = random.Next(10, 100000);
                 bool critical = random.Next(5) == 0;
                 float drift = ((float)random.NextDouble() - 0.5f) * 100;
-                float duration = 0.8f + (float)random.NextDouble() * 0.4f;
+                float duration = 1.2f + (float)random.NextDouble() * 0.6f;
                 Workload mode = workload == Workload.Mixed ? (Workload)(1 + sampleNumber % 7) : workload;
                 // Rotate templates independently of the event RNG, preserving battlefield positions across modes.
                 int index = sampleNumber / 7;

@@ -93,7 +93,7 @@ namespace BurstWord.Baseline.Editor
             window.minSize = new Vector2(960, 760);
             if (animation != null) window.preset = animation;
             if (source != null)
-            { window.font = source.font; window.fontSize = source.fontSize; window.duration = Mathf.Max(.05f, source.lifetime); window.wrapWidth = source.wrapWidth; window.space = source.spaceMode; }
+            { window.font = source.font; window.fontSize = source.fontSize; window.wrapWidth = source.wrapWidth; window.space = source.spaceMode; }
             window.ResetPreview(); window.Show();
         }
         private void OnEnable()
@@ -422,8 +422,8 @@ namespace BurstWord.Baseline.Editor
         }
         internal void Restart(string text, float duration, BrgTextAnimation animation)
         {
-            Renderer.Clear(); Renderer.EditorPreviewFrame(0); Renderer.lifetime = duration;
-            Renderer.EmitText(new BrgDamageTextRenderer.TextPose(Vector3.zero, Quaternion.identity, Vector3.one), text, Color.white, animation: animation);
+            Renderer.Clear(); Renderer.EditorPreviewFrame(0);
+            Renderer.EmitText(new BrgDamageTextRenderer.TextPose(Vector3.zero, Quaternion.identity, Vector3.one), text, Color.white, duration: duration, animation: animation);
         }
         internal void SetSpace(BrgDamageTextRenderer.SpaceMode space)
         { Renderer.spaceMode = space; camera.orthographic = space != BrgDamageTextRenderer.SpaceMode.WorldFollow; }

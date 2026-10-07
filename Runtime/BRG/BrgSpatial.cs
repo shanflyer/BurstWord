@@ -184,29 +184,29 @@ namespace BurstWord.BRG
         }
 
         public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset,
-            Quaternion? rotation, Vector3? scale, float horizontalDrift, float durationScale,
+            Quaternion? rotation, Vector3? scale, float horizontalDrift, float duration,
             BrgTextAnimation animation, float animationAmplitude)
-            => EmitText(target, text, color, offset, rotation, scale, horizontalDrift, durationScale,
+            => EmitText(target, text, color, offset, rotation, scale, horizontalDrift, duration,
                 animation, animationAmplitude, font: null);
 
         public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset = default,
-            Quaternion? rotation = null, Vector3? scale = null, float horizontalDrift = 0, float durationScale = 1,
+            Quaternion? rotation = null, Vector3? scale = null, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
             int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
         {
             if (target == null) return default;
             var local = new TextPose(Vector3.zero, rotation ?? Quaternion.identity, scale ?? Vector3.one, offset);
-            return EmitSpatial(text, color, target, local, horizontalDrift, durationScale,
+            return EmitSpatial(text, color, target, local, horizontalDrift, duration,
                 ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
         }
-        public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift, float durationScale,
+        public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift, float duration,
             BrgTextAnimation animation, float animationAmplitude)
-            => EmitText(pose, text, color, horizontalDrift, durationScale, animation, animationAmplitude, font: null);
+            => EmitText(pose, text, color, horizontalDrift, duration, animation, animationAmplitude, font: null);
 
-        public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
+        public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift = 0, float duration = 1.5f,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
             int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
-            => EmitSpatial(text, color, null, pose, horizontalDrift, durationScale,
+            => EmitSpatial(text, color, null, pose, horizontalDrift, duration,
                 ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
 
         public bool IsAlive(TextHandle handle) => ReferenceEquals(handle.owner, this) && labels != null &&
@@ -226,11 +226,18 @@ namespace BurstWord.BRG
         public bool TryRelease(TextHandle handle)
         { if (!IsAlive(handle)) return false; ReturnLabel(handle.index); return true; }
 
-        private TextHandle EmitSpatial(string text, Color color, Transform target, TextPose pose, float drift, float durationScale,
+        private static void ValidateDuration(float duration)
+        {
+            if (!(duration > 0) || float.IsInfinity(duration))
+                throw new ArgumentOutOfRangeException(nameof(duration), "Duration must be finite and greater than zero (seconds).");
+        }
+
+        private TextHandle EmitSpatial(string text, Color color, Transform target, TextPose pose, float drift, float duration,
             BrgTextAnimation animation = null, float amplitude = 1, bool resolvedAnimation = false,
             TMP_FontAsset selectedFont = null, int selectedSize = 0,
             TextAnchor? selectedAlignment = null, Vector2? selectedTextArea = null, int fontIndex = 0)
         {
+            ValidateDuration(duration);
             using var appearance = new EmissionAppearanceScope(this, selectedFont, selectedSize, selectedAlignment, selectedTextArea, fontIndex);
             using (preparingBatch ? default(Unity.Profiling.ProfilerMarker.AutoScope) : GenerateMarker.Auto())
             {
@@ -239,17 +246,17 @@ namespace BurstWord.BRG
                 bool built;
                 using (LayoutMarker.Auto()) built = BuildLayout(text, color);
                 if (!built) { FailedLayoutCount++; return default; }
-                return CommitSpatial(target, pose, drift, durationScale, default, 0, layout.Count,
+                return CommitSpatial(target, pose, drift, duration, default, 0, layout.Count,
                     resolvedAnimation ? animation : animation ?? GetAnimation(0), amplitude);
             }
         }
-        private unsafe TextHandle CommitSpatial(Transform target, TextPose pose, float drift, float durationScale,
+        private unsafe TextHandle CommitSpatial(Transform target, TextPose pose, float drift, float duration,
             NativeArray<PreparedGlyph> prepared, int first, int count, BrgTextAnimation animation = null, float amplitude = 1)
         {
                 CompleteVisibilityWork();
                 using var instancesScope = InstancesMarker.Auto();
                 int id = freeLabels[--freeLabelCount];
-                float birth = Now, duration = Mathf.Max(0.01f, lifetime * durationScale);
+                float birth = Now;
                 var label = new Label { active = true, end = birth + duration, birth = birth, duration = duration,
                     head = -1, tail = -1, firstGlyphSlot = -1, contiguousGlyphs = true, space = spaceMode, pose = pose,
                     target = spaceMode == SpaceMode.ScreenSnapshot ? null : target,

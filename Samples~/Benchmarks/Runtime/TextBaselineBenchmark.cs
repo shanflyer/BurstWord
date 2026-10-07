@@ -81,8 +81,8 @@ namespace BurstWord.Baseline
                 int value = random.Next(10, 100000);
                 bool critical = random.Next(5) == 0;
                 float drift = ((float)random.NextDouble() - 0.5f) * 100;
-                float durationScale = 0.8f + (float)random.NextDouble() * 0.4f;
-                textPool.Emit(position, value, critical ? new Color(1, 0.65f, 0.15f) : Color.white, drift, durationScale);
+                float duration = 1.2f + (float)random.NextDouble() * 0.6f;
+                textPool.Emit(position, value, critical ? new Color(1, 0.65f, 0.15f) : Color.white, drift, duration);
             }
         }
 

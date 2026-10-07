@@ -18,7 +18,7 @@
 
 ## 3. 创建管理器
 
-在场景创建空物体，添加 **Brg Damage Text Renderer**。指定 **Default Text Font [0]** 和 **Camera**，设置字号、Lifetime 和 Maximum Live Labels。保持默认屏幕空间和最前显示即可开始。
+在场景创建空物体，添加 **Brg Damage Text Renderer**。指定 **Default Text Font [0]** 和 **Camera**，设置字号和 Maximum Live Labels。保持默认屏幕空间和最前显示即可开始。
 
 默认不自动发射文字。角色受伤时由业务代码调用发射接口。一个管理器可处理多字体、多效果和多动画，无需每种效果创建一个管理器。
 
@@ -48,6 +48,19 @@
 
 尺寸使用和字号相同的排版单位：屏幕模式一起接受 UI scaling，世界模式一起接受世界单位比例和目标姿态。对齐和区域在发射时捕获，修改默认值只影响后续发射。
 
+### 可视化布局预览
+
+点击管理器 **Text Layout → Open Layout Preview**。左边输入任意文字、多行内容或富文本，选择管理器中的字体；左侧的字号、对齐、区域和换行参数直接编辑当前管理器，支持 Undo。Inspector 或预览窗口中修改设置，都会更新右侧预览。
+
+- **青色框**：固定文本区域，标明宽 × 高。拖动右下角可调整区域大小；文字超出区域仍然显示，因为固定区域不裁剪。
+- **黄色框**：实际字形绘制边界，包含描边、阴影等字形 padding。底部另显示排版尺寸、行数、字形数。
+- **粉色虚线**：有效换行宽度，固定区域更窄时使用较小宽度。关闭换行时不显示。
+- **十字**：发射点，也就是布局坐标的原点。关闭固定区域时，可看到不同对齐如何相对此点排布。
+
+Auto Fit 自动展示完整区域和文字；滚轮缩放，中键或 Alt+左键拖动平移，Reset View 恢复。所有尺寸均为字体排版单位，预览缩放只改变视图。这里检查二维文字布局，游戏中的 UI 缩放和世界透视在绘制时应用；预览暂停 GPU 动画以便观察排版。
+
+窗口使用独立、隐藏且不保存的预览场景，预览固定使用插件已有的 Instancing 绘制，与 BRG 共用排版和字形 shader 逻辑，不改变游戏管理器的绘制后端。沿用 TMP 字体、材质、fallback、Sprite 及已注册的塑形接口，不创建场景中的测试文字。Play 中可修改预览内容，但布局参数只读，不清空或重启游戏管理器。关闭窗口或重载脚本后释放预览资源；不向 Player 添加预览代码。
+
 单条可以覆盖设置：
 
 ```csharp
@@ -75,12 +88,14 @@ public class DamageTextExample : MonoBehaviour
     {
         if (damageText == null || target == null) return;
         if (GUI.Button(new Rect(20, 20, 160, 40), "Show Damage"))
-            damageText.Emit(target.position + Vector3.up * 1.5f, 1234, Color.white);
+            damageText.Emit(target.position + Vector3.up * 1.5f, 1234, Color.white, duration: 1.2f);
     }
 }
 ```
 
 Play 后点击按钮。正式业务只需调用 `Emit(hitPosition, damage, color)`。字符串使用 `EmitText(hitPosition, "Miss", Color.gray)`。参数顺序始终是位置/目标、数字/文字、颜色。
+
+每次发射通过 `duration:` 指定本条存在的秒数，例如 `Emit(hitPosition, damage, color, duration: 1.2f)` 或 `EmitText(hitPosition, "Miss", Color.gray, duration: 2f)`。省略时默认 1.5 秒；Setup 没有全局寿命设置。批量用 `new TextEmission(text, color, pose, duration: 2f)`，或设置请求的 `Duration` 字段。各条时长独立，GPU 动画会在各自的寿命内播放完整曲线。时长必须是有限的正数；对象初始化器方式也必须填写 `Duration`，非法批量时长会在发射任何文字前报错。
 
 ## 5. 每条选择字体、效果和动画
 
@@ -150,12 +165,12 @@ damageText.EmitBatch(requests, 2);
 
 Inspector 按使用目的分区，默认展开，并在当前编辑器会话内记住折叠状态：
 
-- **Setup**：相机、寿命、最大同时存在数量，以及管线状态。缺少配置时显示 Install BRG Rendering；已配置时显示 Rendering Ready。
+- **Setup**：相机、最大同时存在数量，以及管线状态。缺少配置时显示 Install BRG Rendering；已配置时显示 Rendering Ready。
 - **Fonts**：普通文字字体和 Sprite 图片字体统一放在这组。Default Text Font [0]、字号和 Additional Text Fonts [1..N] 使用原生 `TMP_FontAsset`，列表供 `fontIndex` 和 `<font>` 标签选择。Use Sprite Fonts 开启后显示 Default Sprite Font 和 Named Sprite Fonts，直接使用原生 `TMP_SpriteAsset`；关闭时隐藏并停用这些 Sprite 设置。
 - **Text Layout**：横竖对齐、固定文本区域、自动换行、富文本和字距。关闭固定区域或自动换行时，隐藏其尺寸或宽度参数。塑形通过代码注册委托，没有塑形 Asset 或启用开关。
 - **Space & Occlusion**：空间模式和遮挡模式。World Follow 时显示世界单位比例。
 - **UI Scaling**：只在屏幕模式显示。可以跟随已有屏幕 Canvas 的实际缩放，或手动配置 Canvas Scaler 对应模式；只显示当前模式需要的参数。
-- **Animations**：一个带序号的动画列表，`0` 是默认项；每行可编辑、预览。代码通过 `animationIndex` 选择，没有单独的默认动画开关或预加载列表。
+- **Animations**：一个带序号的动画列表，`0` 是默认项；每行可编辑、预览。代码通过 `animationIndex` 选择，没有单独的默认动画开关或预加载列表。 Built-in Motion → Rise Height 设置内置动画高度；速度为高度 / 本条 duration。
 - **Runtime Status**：只在 Play 时显示当前后端、缩放、活跃文字/字形、绘制数量和缺失资源计数。
 
 折叠分组只隐藏界面；分组内的功能开关才停用功能，并保留原先资源。Play 中修改字体、字号、相机或排版资源时会重建管理器，清掉当前飘字；需要多效果同时出现时使用逐条参数。修改动画列表影响后续发射，已有飘字继续使用原动画。

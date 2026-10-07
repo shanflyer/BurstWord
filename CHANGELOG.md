@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expose built-in Rise Height under Animations; explain that empty lists/slots use it and speed is height divided by the per-emission duration. Preserve existing serialized height values and GPU motion.
+
+- Add Text Layout → Open Layout Preview: editable text/color/font, shared live layout controls, fixed-area dimensions and resizing with Undo, actual glyph bounds, wrapping guides, auto fit and zoom/pan. Use an isolated editor-only preview scene and the real BurstWord layout/render path, including optional registered shaping, with no saved preview objects or Player overhead.
+
+- Replace durationScale / TextEmission.DurationScale multipliers with per-emission duration / TextEmission.Duration in seconds on all numeric, text, spatial and batch APIs. Remove global Lifetime from both renderers and Setup; omitted duration defaults to 1.5 seconds. Reject non-finite/non-positive durations before batch commits, preserve normalized GPU animation, and pass seconds explicitly in animation preview and matching benchmarks. Existing callers must convert their old multiplier times manager lifetime to seconds.
+
 - Organize the manager Inspector into Setup, Fonts, Text Layout, Space & Occlusion, UI Scaling, Animations and Runtime Status with session-persistent foldouts and conditional fields. Group animation authoring properties separately from preview settings, simplify help text, and keep pipeline installation visible when configuration is missing.
 - Replace separate default/enable/preload animation settings with one indexed Animations list and per-row Edit / Preview. Add animationIndex to all text/numeric spatial emissions and batch requests, validate whole batches, and migrate old scene defaults/presets into the list.
 - Remove the manager Inspector's Advanced rendering group. Use automatic rendering defaults and keep backend selection in the pressure-test panel; retain code overrides and existing serialized data for compatibility.

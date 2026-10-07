@@ -21,8 +21,8 @@ using BurstWord.BRG;
 using UnityEngine;
 
 // renderer is a reference to your BrgDamageTextRenderer manager.
-renderer.Emit(hitPosition, 1234, Color.white);
-renderer.EmitText(hitPosition, "<b>Critical 1234</b>", Color.yellow);
+renderer.Emit(hitPosition, 1234, Color.white, duration: 1.2f);
+renderer.EmitText(hitPosition, "<b>Critical 1234</b>", Color.yellow, duration: 2f);
 // Direct font assets use their own material; registration is optional.
 renderer.Emit(hitPosition, 1234, Color.yellow,
     font: criticalFont, animation: criticalAnimation, fontSize: 40);
@@ -31,6 +31,8 @@ renderer.Emit(hitPosition, 1234, Color.yellow, fontIndex: 1);
 renderer.EmitText(hitPosition, "Healing +200", Color.green, fontIndex: 2);
 ```
 
+`duration` is each message's lifetime in seconds, with 1.5 seconds used only when omitted. It is available on every emission overload and as `TextEmission.Duration` / constructor `duration:` in batches; the manager has no global lifetime setting. GPU animation plays its complete curve across that message's duration. Use finite positive seconds.
+
 The manager provides whole-message sorting, three occlusion modes, fixed-size camera-facing text, transform following, world-space perspective and sampled GPU animation. The default typography uses TMP font/glyph resources, font fallbacks, pair adjustments, material effects, sprites, supported rich-text tags, Unicode bidirectional ordering and wrapping. It creates no TMP text component. Assign fonts containing your required glyphs. OpenType complex-script shaping is optional: the core package contains no external native font library and does not select a third-party provider for you.
 
 Start with the [direct-integration tutorial](Documentation~/QUICKSTART.md). The Inspector groups optional settings and hides child settings when their feature is disabled; collapsing a group only hides its UI. `font` / `fontIndex`, `fontSize` and `animation` / `animationIndex` choices are also available on both `EmitText` spatial overloads and each `TextEmission` in `EmitBatch`; the manager defaults and existing labels stay unchanged. A direct `font:` takes priority over `fontIndex`. Animations use one indexed Inspector list: index 0 is the first/default item, and an empty list/slot uses linear motion. A direct `animation:` takes priority over `animationIndex`. Each animation row opens Edit / Preview. Fonts use their own TMP material for outline, underlay and glow; there is no separate material override list or parameter. The font list is for selection and `<font>` name lookup; glyph fallback follows TMP font-asset/global fallback lists.
@@ -38,6 +40,8 @@ Start with the [direct-integration tutorial](Documentation~/QUICKSTART.md). The 
 The **Fonts** group also holds native TMP Sprite Assets for image fonts and emoji. Enable **Use Sprite Fonts**, assign a **Default Sprite Font** (empty uses TMP Settings), and use the resource's Unicode entries or `<sprite>` index/name tags. Its native sprite fallback chain is used automatically; optional additional sprite fonts are available for named asset tags. There is no separate text-to-sprite mapping table.
 
 Screen-space text supports the same scaling modes and formulas as Unity's **Canvas Scaler**: Constant Pixel Size, Scale With Screen Size (Match Width Or Height / Expand / Shrink), and Constant Physical Size. Configure **UI Scaling** on the manager, or assign an existing screen-space Canvas to use its root Canvas's actual scale factor. The default remains 1920×1080 with Match 0.5. Scaling changes apply to live screen text without rebuilding labels; world-space text retains world units and perspective.
+
+**Text Layout → Open Layout Preview** opens an isolated editor window with editable content, font selection, live manager layout controls, dimensions, fixed-area and glyph outlines, wrap guides, zoom/pan and a draggable area corner with Undo. It renders through BurstWord, follows Inspector changes and creates no saved scene objects or Player preview code. Dimensions are local layout units; UI scaling/world projection and animation are excluded from this layout view.
 
 **Text alignment** supplies left/center/right and top/middle/bottom controls. Align against the emission point, or enable **Use Fixed Text Area** to align inside a numeric width/height area centered on that point. Both modes create no UI objects. Each emission and batch request can override `alignment: TextAnchor.UpperLeft` and `textAreaSize: new Vector2(300, 100)`; alignment is captured at emission and shared with cached and Job-prepared layouts.
 
