@@ -36,7 +36,9 @@ namespace BurstWord.BRG
         private static readonly string[] CjkText = { "暴击 {0}", "闪避 {0}", "回復 {0}", "피해 {0}" };
         private static readonly string[] ComplexText = { "سلام {0}", "مرحبا {0}", "नमस्ते {0}", "क्षि {0}", "שלום {0}", "สวัสดี {0}", "伤害 {0} العربية नमस्ते" };
         private static readonly string[] RichText = { "<b>暴击 {0}</b>", "<i>Damage {0}</i>", "<color=#FFD34D>{0}</color>", "<size=130%>{0}</size>", "<u>{0}</u>", "<s>{0}</s>", "伤害 {0} x<sup>2</sup>", "<font=\"NotoSerif SDF\">office ffi {0}</font>" };
-        private static readonly string[] EffectText = { "<material=\"BRG Outline\">{0}</material>", "<material=\"BRG Glow\">{0}</material>", "<material=\"BRG Outline\"><b>暴击 {0}</b></material>" };
+        private static readonly string[] EffectText = { "{0}", "{0}", "<b>暴击 {0}</b>" };
+        // Fonts 7 and 8 own their outline/shadow and glow materials respectively.
+        private static int EffectFontIndex(int template) => template % EffectText.Length == 1 ? 8 : 7;
         private static readonly string[] EmojiText = { "<sprite=0> {0}", "<sprite=1> {0}", "😊 {0}", "☺️ {0}" };
         private static readonly string[] WrapText = { "伤害 {0} 自动换行测试文字", "Damage {0} word wrapping test", "伤害 {0} العربية नमस्ते" };
 
@@ -100,10 +102,12 @@ namespace BurstWord.BRG
         {
             var position = textRenderer.worldCamera.transform.position + textRenderer.worldCamera.transform.forward * 40;
             textRenderer.Emit(position, 1234567890, Color.white);
-            string[][] groups = { CjkText, ComplexText, RichText, EffectText, EmojiText, WrapText };
+            string[][] groups = { CjkText, ComplexText, RichText, EmojiText, WrapText };
             foreach (var templates in groups)
                 foreach (string template in templates)
                     textRenderer.EmitText(position, template.Replace("{0}", "1234567890"), Color.white);
+            for (int i = 0; i < EffectText.Length; i++)
+                textRenderer.EmitText(position, EffectText[i].Replace("{0}", "1234567890"), Color.white, fontIndex: EffectFontIndex(i));
             textRenderer.Clear();
         }
 
@@ -141,7 +145,8 @@ namespace BurstWord.BRG
                 var pose = new BrgDamageTextRenderer.TextPose(follow ? Vector3.zero : position, Quaternion.identity, Vector3.one,
                     follow ? target.InverseTransformPoint(position) : Vector3.zero);
                 emissionRequests[requestCount++] = new BrgDamageTextRenderer.TextEmission(text, color, pose,
-                    mode == Workload.Wrapping ? 140 : 0, drift, duration, follow ? target : null);
+                    mode == Workload.Wrapping ? 140 : 0, drift, duration, follow ? target : null,
+                    fontIndex: mode == Workload.Effects ? EffectFontIndex(index) : 0);
                 sampleNumber++;
             }
             try { textRenderer.EmitBatch(emissionRequests, requestCount); }

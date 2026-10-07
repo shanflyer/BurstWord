@@ -3056,7 +3056,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   capacity: 50000
-  font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  font: {fileID: 11400000, guid: 55d5681d24819b04daea115d668a2f23, type: 2}
   glyphShader: {fileID: 4800000, guid: 890f1272ddd4e6a429988d6cb6629147, type: 3}
   worldCamera: {fileID: 492997423}
   fontSize: 28
@@ -3077,20 +3077,18 @@ MonoBehaviour:
   enableLigatures: 1
   enableShaping: 1
   wrapWidth: 0
-  additionalFonts:
+  fonts:
   - {fileID: 11400000, guid: c253666b126f71d449d19ffd32c14f34, type: 2}
   - {fileID: 11400000, guid: 9f5ed8abcaabfba4ebfef059defebc46, type: 2}
   - {fileID: 11400000, guid: 044341a90284efd4daaaece55a1d7457, type: 2}
   - {fileID: 11400000, guid: 04c9a6db25a225846b815e256678eb55, type: 2}
   - {fileID: 11400000, guid: f25b8658edd8fd64a823626cc72bf2cb, type: 2}
   - {fileID: 11400000, guid: 5fe409e00d4c4a8488e024c527477096, type: 2}
+  - {fileID: 11400000, guid: affa29e8b45a5ad468eea92ba4cb93c2, type: 2}
+  - {fileID: 11400000, guid: 6db44434982866f49b1340f0b2178ec7, type: 2}
   spriteAsset: {fileID: 11400000, guid: c41005c129ba4d66911b75229fd70b45, type: 2}
   additionalSpriteAssets: []
-  materialPresets:
-  - {fileID: 2100000, guid: a7934943dec0fcb4290956bd75f68c68, type: 2}
-  - {fileID: 2100000, guid: abb087da412a63e4ab45abca1bcb5b8c, type: 2}
   fontSources: {fileID: 11400000, guid: 31f55bb140755ec41b3db17f819ef867, type: 2}
-  fontMaterial: {fileID: 0}
   tightGlyphBounds: 1
   spriteSequences:
   - text: "\u263A\uFE0F"

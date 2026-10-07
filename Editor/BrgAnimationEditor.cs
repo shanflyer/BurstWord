@@ -402,7 +402,7 @@ namespace BurstWord.Baseline.Editor
                 var asset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(AssetDatabase.GUIDToAssetPath(guid));
                 if (asset != null && asset != font) fonts.Add(asset);
             }
-            Renderer.additionalFonts = fonts.ToArray(); root.SetActive(true); Renderer.Initialize();
+            Renderer.fonts = fonts.ToArray(); root.SetActive(true); Renderer.Initialize();
             if (!Renderer.IsInitialized) { Dispose(); throw new System.InvalidOperationException("预览需要 TMP 字体、支持 BRG 的 URP 和 BurstWord 渲染功能。"); }
         }
         internal void Restart(string text, float duration, BrgTextAnimation animation)

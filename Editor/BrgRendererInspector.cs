@@ -1,5 +1,6 @@
 using BurstWord.BRG;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,15 +9,27 @@ namespace BurstWord.Baseline.Editor
     [CustomEditor(typeof(BrgDamageTextRenderer))]
     public sealed class BrgRendererInspector : UnityEditor.Editor
     {
-        private bool fonts, materials, sprites, typography, animation, advanced;
+        private bool fonts, sprites, typography, animation, advanced;
+        private ReorderableList fontList;
         private float lastWrapWidth = 400;
         private bool resourceChanges;
 
         private void OnEnable()
         {
             var renderer = (BrgDamageTextRenderer)target;
-            fonts = renderer.additionalFonts != null && renderer.additionalFonts.Length > 0;
-            materials = renderer.fontMaterial != null || renderer.materialPresets != null && renderer.materialPresets.Length > 0;
+            fonts = renderer.fonts != null && renderer.fonts.Length > 0;
+            fontList = new ReorderableList(serializedObject, serializedObject.FindProperty("fonts"), true, true, true, true);
+            fontList.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Fonts (indices 1..N)");
+            fontList.drawElementCallback = (rect, index, active, focused) =>
+            {
+                rect.y += 2; rect.height = EditorGUIUtility.singleLineHeight;
+                EditorGUI.PropertyField(rect, fontList.serializedProperty.GetArrayElementAtIndex(index), new GUIContent("[" + (index + 1) + "]"));
+            };
+            fontList.onAddCallback = list =>
+            {
+                int index = list.serializedProperty.arraySize++;
+                list.serializedProperty.GetArrayElementAtIndex(index).objectReferenceValue = null;
+            };
             sprites = renderer.spriteAsset != null || renderer.additionalSpriteAssets != null && renderer.additionalSpriteAssets.Length > 0 ||
                 renderer.spriteSequences != null && renderer.spriteSequences.Length > 0;
             animation = renderer.defaultAnimation != null;
@@ -43,17 +56,14 @@ namespace BurstWord.Baseline.Editor
             using (new EditorGUI.DisabledScope(true)) Field("m_Script", "Script");
             EditorGUILayout.LabelField("Fonts", EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
-            Field("font", "Default Font", "Default TMP Font Asset. Its own fallback font assets are used automatically. Individual emissions can override it.");
+            Field("font", "Default Font [0]", "fontIndex: 0. Uses this TMP Font Asset's own material and fallback fonts.");
             resourceChanges |= EditorGUI.EndChangeCheck();
             Field("fontSize", "Font Size");
-            if (Section(ref fonts, "Additional fonts (optional)"))
+            if (Section(ref fonts, "Font choices (optional)"))
             {
-                EditorGUI.BeginChangeCheck(); Field("useAdditionalFonts", "Use Additional Fonts");
-                if (serializedObject.FindProperty("useAdditionalFonts").boolValue)
-                {
-                    EditorGUILayout.HelpBox("Extra fonts for <font> tag lookup and additional missing-glyph lookup. The Default Font's own fallback list is already supported; do not duplicate it here. Direct font: arguments require no registration.", MessageType.Info);
-                    Field("additionalFonts", "Additional Fonts");
-                }
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.HelpBox("fontIndex: 0 = default; 1..N = list order. Effects come from each font's own material. This list selects fonts and resolves <font> names; missing glyphs use TMP fallback lists. Reordering changes indices. Direct font: arguments need no registration.", MessageType.Info);
+                fontList.DoLayoutList();
                 resourceChanges |= EditorGUI.EndChangeCheck();
             }
 
@@ -88,16 +98,6 @@ namespace BurstWord.Baseline.Editor
             }
             if (selected) Field("wrapWidth", "Wrap Width", "Maximum line width in layout units. An enabled fixed text area can reduce this to its width.");
 
-            if (Section(ref materials, "Font material effects (optional)"))
-            {
-                EditorGUI.BeginChangeCheck(); Field("useMaterialPresets", "Use Default / Tag Material Overrides");
-                if (serializedObject.FindProperty("useMaterialPresets").boolValue)
-                {
-                    EditorGUILayout.HelpBox("Use TMP material presets for outline, underlay and glow. Each material must belong to the font it is used with. Direct material: arguments need no registration.", MessageType.Info);
-                    Field("fontMaterial", "Default Font Material"); Field("materialPresets", "Materials For Rich Text Tags");
-                }
-                resourceChanges |= EditorGUI.EndChangeCheck();
-            }
             if (Section(ref sprites, "Sprites and emoji (optional)"))
             {
                 EditorGUI.BeginChangeCheck();

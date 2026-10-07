@@ -172,36 +172,26 @@ namespace BurstWord.BRG
         public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift, float durationScale)
             => Emit(worldPosition, damage, color, horizontalDrift, durationScale, font: null);
 
-        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift, float durationScale,
-            BrgTextAnimation animation, float animationAmplitude, TMP_FontAsset font,
-            Material material, int fontSize, bool useLegacyAnimation)
-            => Emit(worldPosition, damage, color, horizontalDrift, durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment: null);
-
         public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            Material material = null, int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0)
         {
             if (!isActiveAndEnabled || !IsInitialized) return false;
             if (freeLabelCount == 0) { DroppedCount++; return false; }
             // Keep the same integer-to-string work as the baseline for this first comparison.
             return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift,
-                durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment, textAreaSize);
+                durationScale, animation, animationAmplitude, font, fontSize, useLegacyAnimation, alignment, textAreaSize, fontIndex);
         }
 
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float durationScale)
             => EmitText(worldPosition, text, color, horizontalDrift, durationScale, font: null);
 
-        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float durationScale,
-            BrgTextAnimation animation, float animationAmplitude, TMP_FontAsset font,
-            Material material, int fontSize, bool useLegacyAnimation)
-            => EmitText(worldPosition, text, color, horizontalDrift, durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation, alignment: null);
-
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            Material material = null, int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0)
             => EmitSpatial(text, color, null, new TextPose(worldPosition, Quaternion.identity, Vector3.one),
                 horizontalDrift, durationScale, useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation,
-                animationAmplitude, true, font, material, fontSize, alignment, textAreaSize).IsAlive;
+                animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex).IsAlive;
 
         private bool BuildBasicLayout(string text, Color color)
         {
@@ -255,16 +245,19 @@ namespace BurstWord.BRG
                 descender = Mathf.Min(descender, baseline + face.descentLine * scale);
                 if (metrics.width > 0 && metrics.height > 0)
                 {
-                    float padding = Mathf.Min(1, resolved.font.atlasPadding);
+                    float fullPadding = AtlasMode(resolved.font) == 0 ? resolved.font.atlasPadding : 0;
+                    float padding = fullPadding > 0 ? RequiredPadding(resolved.font, resolved.font.material, false) : 0;
                     var atlas = resolved.font.atlasTextures[glyph.atlasIndex];
                     var r = glyph.glyphRect;
+                    float trimX = (fullPadding - padding) * (metrics.width + fullPadding * 2) / Mathf.Max(1, r.width + fullPadding * 2);
+                    float trimY = (fullPadding - padding) * (metrics.height + fullPadding * 2) / Mathf.Max(1, r.height + fullPadding * 2);
                     layout.Add(new PositionedGlyph
                     {
                         glyph = resolved,
                         tint = color,
-                        rect = new Vector4(x + (metrics.horizontalBearingX - padding + adjustX) * scale,
-                            baseline + (metrics.horizontalBearingY - metrics.height - padding + adjustY) * scale,
-                            (metrics.width + padding * 2) * scale, (metrics.height + padding * 2) * scale),
+                        rect = new Vector4(x + (metrics.horizontalBearingX - fullPadding + trimX + adjustX) * scale,
+                            baseline + (metrics.horizontalBearingY - metrics.height - fullPadding + trimY + adjustY) * scale,
+                            (metrics.width + fullPadding * 2 - trimX * 2) * scale, (metrics.height + fullPadding * 2 - trimY * 2) * scale),
                         uv = new Vector4((r.x - padding) / atlas.width, (r.y - padding) / atlas.height,
                             (r.width + padding * 2) / atlas.width, (r.height + padding * 2) / atlas.height)
                     });
@@ -297,14 +290,6 @@ namespace BurstWord.BRG
             if (glyphCache.TryGetValue(unicode, out resolved)) return true;
             var character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, font, true, FontStyles.Normal,
                 FontWeight.Regular, out _);
-            if (character == null && useAdditionalFonts && additionalFonts != null)
-                foreach (var candidate in additionalFonts)
-                {
-                    if (candidate == null) continue;
-                    character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, candidate, true,
-                        FontStyles.Normal, FontWeight.Regular, out _);
-                    if (character != null) break;
-                }
             if (character == null && TMP_Settings.fallbackFontAssets != null)
                 character = TMP_FontAssetUtilities.GetCharacterFromFontAssets(unicode, font, TMP_Settings.fallbackFontAssets,
                     true, FontStyles.Normal, FontWeight.Regular, out _);

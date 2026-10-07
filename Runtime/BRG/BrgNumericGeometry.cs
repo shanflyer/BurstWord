@@ -40,14 +40,18 @@ namespace BurstWord.BRG
                 if (!Resolve(unicode, out var resolved)) continue;
                 var glyph = resolved.character.glyph; var face = resolved.font.faceInfo; var metrics = glyph.metrics;
                 float scale = (float)fontSize / face.pointSize * face.scale * resolved.character.scale * glyph.scale;
-                float baseline = face.baseline * scale, padding = Mathf.Min(1, resolved.font.atlasPadding);
+                float baseline = face.baseline * scale;
+                float fullPadding = AtlasMode(resolved.font) == 0 ? resolved.font.atlasPadding : 0;
+                float padding = fullPadding > 0 ? RequiredPadding(resolved.font, resolved.font.material, false) : 0;
                 var atlas = resolved.font.atlasTextures[glyph.atlasIndex]; var rect = glyph.glyphRect;
+                float trimX = (fullPadding - padding) * (metrics.width + fullPadding * 2) / Mathf.Max(1, rect.width + fullPadding * 2);
+                float trimY = (fullPadding - padding) * (metrics.height + fullPadding * 2) / Mathf.Max(1, rect.height + fullPadding * 2);
                 numericGlyphs[i] = new NumericGlyph { valid = true, visible = metrics.width > 0 && metrics.height > 0,
                     scale = scale, advance = metrics.horizontalAdvance, baseline = baseline, ascent = baseline + face.ascentLine * scale,
                     descent = baseline + face.descentLine * scale,
                     geometry = new PositionedGlyph { glyph = resolved,
-                        rect = new Vector4(metrics.horizontalBearingX - padding, metrics.horizontalBearingY - metrics.height - padding,
-                            (metrics.width + padding * 2) * scale, (metrics.height + padding * 2) * scale),
+                        rect = new Vector4(metrics.horizontalBearingX - fullPadding + trimX, metrics.horizontalBearingY - metrics.height - fullPadding + trimY,
+                            (metrics.width + fullPadding * 2 - trimX * 2) * scale, (metrics.height + fullPadding * 2 - trimY * 2) * scale),
                         uv = new Vector4((rect.x - padding) / atlas.width, (rect.y - padding) / atlas.height,
                             (rect.width + padding * 2) / atlas.width, (rect.height + padding * 2) / atlas.height) } };
             }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Simplify effects to the chosen TMP Font Asset's own material. Remove independent manager material presets/overrides, public material emission parameters and `<material>` tags. Existing calls using those parameters must select a font asset owning the desired material instead.
+- Add `fontIndex` to numeric/text, Transform/pose and batch emissions: 0 selects Default Font, 1..N selects the numbered font list. A direct font asset takes priority. Validate batch indices before any emission is committed.
+- Replace Additional Fonts with font choices (serialized assets migrate automatically). The list selects fonts and resolves `<font>` names; missing glyphs follow native TMP font and global fallback chains.
+- Supply ready-made default/effect font assets in the benchmark, selecting effects by index and sharing donor atlases. Preserve default numeric Burst preparation and account for owned material effects in numeric glyph padding.
+
 ## 0.3.4
 
 - Group default font, font size and optional additional fonts together in the manager Inspector; clarify that TMP font-asset fallback lists already work without additional registration.

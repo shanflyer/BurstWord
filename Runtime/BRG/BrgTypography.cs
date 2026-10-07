@@ -39,17 +39,14 @@ namespace BurstWord.BRG
         }
         [Tooltip("Width in reference-resolution pixels; zero disables automatic wrapping.")]
         [Min(0)] public float wrapWidth;
-        public bool useAdditionalFonts = true;
-        public TMP_FontAsset[] additionalFonts;
+        [UnityEngine.Serialization.FormerlySerializedAs("additionalFonts")]
+        [Tooltip("Font choices: index 0 is the default font, 1..N follow this list. Each font uses its own material and TMP fallback chain.")]
+        public TMP_FontAsset[] fonts;
         public bool useSprites = true;
         public TMP_SpriteAsset spriteAsset;
         public TMP_SpriteAsset[] additionalSpriteAssets;
-        public Material[] materialPresets;
-        public bool useMaterialPresets = true;
         public BrgFontSources fontSources;
         private BrgFontSources[] discoveredFontSources;
-        [Tooltip("Optional TMP material preset for the default font (outline, underlay, glow, face color).")]
-        public Material fontMaterial;
         [Tooltip("Limit transparent glyph margins to the current style/effect extent. Disable for conservative full-atlas bounds.")]
         public bool tightGlyphBounds = true;
         [Serializable] public struct SpriteSequence { public string text; public TMP_SpriteAsset asset; public string spriteName; }
@@ -65,7 +62,6 @@ namespace BurstWord.BRG
         private struct TextStyle
         {
             public TMP_FontAsset font;
-            public Material material;
             public Color color;
             public float size, baseline, spacing;
             public bool bold, italic, underline, strike, noBreak;
@@ -336,7 +332,7 @@ namespace BurstWord.BRG
 
         private bool Parse(string text, Color color)
         {
-            var style = new TextStyle { font = LayoutFont, material = LayoutMaterial, size = LayoutFontSize, color = color };
+            var style = new TextStyle { font = LayoutFont, size = LayoutFontSize, color = color };
             bool noParse = false;
             for (int i = 0; i < text.Length; i++)
             {
@@ -421,8 +417,7 @@ namespace BurstWord.BRG
                 case "cspace": if (!Number(Value(tag, name), style.size, out style.spacing)) return false; break;
                 case "sup": style.baseline += style.size * 0.35f; style.size *= 0.6f; break;
                 case "sub": style.baseline -= style.size * 0.2f; style.size *= 0.6f; break;
-                case "font": style.font = FindFont(Value(tag, name)); if (style.font == null) return false; style.material = null; break;
-                case "material": style.material = FindMaterial(Value(tag, name)); if (style.material == null) return false; break;
+                case "font": style.font = FindFont(Value(tag, name)); if (style.font == null) return false; break;
                 default: return false; // Unknown tags remain visible; they are not silently swallowed.
             }
             styleFrames.Add(new StyleFrame { tag = name, previous = previous });
@@ -433,14 +428,7 @@ namespace BurstWord.BRG
         {
             if (LayoutFont != null && name == LayoutFont.name) return LayoutFont;
             if (name == font.name) return font;
-            if (useAdditionalFonts && additionalFonts != null) foreach (var asset in additionalFonts) if (asset != null && asset.name == name) return asset;
-            return null;
-        }
-        private Material FindMaterial(string name)
-        {
-            if (LayoutMaterial != null && LayoutMaterial.name == name) return LayoutMaterial;
-            if (useMaterialPresets && fontMaterial != null && fontMaterial.name == name) return fontMaterial;
-            if (useMaterialPresets && materialPresets != null) foreach (var asset in materialPresets) if (asset != null && asset.name == name) return asset;
+            if (fonts != null) foreach (var asset in fonts) if (asset != null && asset.name == name) return asset;
             return null;
         }
         private TMP_SpriteAsset FindSpriteAsset(string name)
@@ -510,13 +498,6 @@ namespace BurstWord.BRG
             if (styledGlyphs.TryGetValue(key, out resolved)) { alternative = resolved.alternative; return true; }
             FontStyles styles = (style.bold ? FontStyles.Bold : FontStyles.Normal) | (style.italic ? FontStyles.Italic : FontStyles.Normal);
             var character = LookupStyledCharacter(unicode, style.font, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
-            if (character == null && useAdditionalFonts && additionalFonts != null)
-                foreach (var candidate in additionalFonts)
-                {
-                    if (candidate == null) continue;
-                    character = LookupStyledCharacter(unicode, candidate, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
-                    if (character != null) break;
-                }
             if (character == null && TMP_Settings.fallbackFontAssets != null)
                 foreach (var candidate in TMP_Settings.fallbackFontAssets)
                 {
@@ -600,7 +581,7 @@ namespace BurstWord.BRG
             catch (EntryPointNotFoundException) { shapingUnavailable = true; Debug.LogWarning("The selected shaping adapter has an incompatible native library; using TMP glyph data.", this); return null; }
         }
 
-        private static bool SameStyle(TextStyle a, TextStyle b) => ReferenceEquals(a.font, b.font) && ReferenceEquals(a.material, b.material) && a.size == b.size && a.baseline == b.baseline && a.spacing == b.spacing && a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.strike == b.strike && a.color == b.color;
+        private static bool SameStyle(TextStyle a, TextStyle b) => ReferenceEquals(a.font, b.font) && a.size == b.size && a.baseline == b.baseline && a.spacing == b.spacing && a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.strike == b.strike && a.color == b.color;
         private unsafe bool ShapeRuns(int start, int end, bool measure)
         {
             shaped.Clear(); runs.Clear();
@@ -742,7 +723,7 @@ namespace BurstWord.BRG
             bool sprite = !ReferenceEquals(token.sprite, null);
             var key = new GeometryKey(sprite ? BrgObjectIdentity.Of(token.sprite) : BrgObjectIdentity.Of(resolved.font),
                 sprite ? token.spriteCharacter.glyph.index : resolved.character.glyph.index,
-                ReferenceEquals(token.style.material, null) ? 0 : BrgObjectIdentity.Of(token.style.material),
+                resolved.font != null && resolved.font.material != null ? BrgObjectIdentity.Of(resolved.font.material) : 0,
                 token.style.size, token.style.bold, token.style.italic, token.alternative);
             if (geometry.TryGetValue(key, out var cached))
             {
@@ -768,7 +749,7 @@ namespace BurstWord.BRG
                 glyph = resolved.character.glyph;
                 texture = resolved.group < 0 ? shapingFaces[resolved.font].Texture(glyph) : resolved.font.atlasTextures[glyph.atlasIndex];
                 scale = GlyphScale(token, resolved);
-                var material = token.style.material != null ? token.style.material : resolved.font.material;
+                var material = resolved.font.material;
                 padding = AtlasMode(resolved.font) == 0 ? RequiredPadding(resolved.font, material, token.style.bold && !token.alternative) : 0;
                 group = Batch(resolved.font, texture, material, AtlasMode(resolved.font)); resolved.group = group;
             }

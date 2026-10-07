@@ -23,14 +23,17 @@ using UnityEngine;
 // renderer is a reference to your BrgDamageTextRenderer manager.
 renderer.Emit(hitPosition, 1234, Color.white);
 renderer.EmitText(hitPosition, "<b>Critical 1234</b>", Color.yellow);
-// Direct per-message choices; these resources do not need Additional Fonts / tag registration.
+// Direct font assets use their own material; registration is optional.
 renderer.Emit(hitPosition, 1234, Color.yellow,
-    font: criticalFont, material: outlineMaterial, animation: criticalAnimation, fontSize: 40);
+    font: criticalFont, animation: criticalAnimation, fontSize: 40);
+// 0 = Default Font; 1..N = the manager's font list, in Inspector order.
+renderer.Emit(hitPosition, 1234, Color.yellow, fontIndex: 1);
+renderer.EmitText(hitPosition, "Healing +200", Color.green, fontIndex: 2);
 ```
 
 The manager provides whole-message sorting, three occlusion modes, fixed-size camera-facing text, transform following, world-space perspective and sampled GPU animation. The default typography uses TMP font/glyph resources, font fallbacks, pair adjustments, material effects, sprites, supported rich-text tags, Unicode bidirectional ordering and wrapping. It creates no TMP text component. Assign fonts containing your required glyphs. OpenType complex-script shaping is optional: the core package contains no external native font library and does not select a third-party provider for you.
 
-Start with the [direct-integration tutorial](Documentation~/QUICKSTART.md). The Inspector groups optional settings and hides child settings when their feature is disabled; collapsing a group only hides its UI. Existing serialized resources are retained when disabling a feature. `font`, `material`, `fontSize` and `animation` overrides are also available on both `EmitText` spatial overloads and each `TextEmission` in `EmitBatch`; the manager defaults and existing labels stay unchanged.
+Start with the [direct-integration tutorial](Documentation~/QUICKSTART.md). The Inspector groups optional settings and hides child settings when their feature is disabled; collapsing a group only hides its UI. `font` / `fontIndex`, `fontSize` and `animation` choices are also available on both `EmitText` spatial overloads and each `TextEmission` in `EmitBatch`; the manager defaults and existing labels stay unchanged. A direct `font:` takes priority over `fontIndex`. Fonts use their own TMP material for outline, underlay and glow; there is no separate material override list or parameter. The font list is for selection and `<font>` name lookup; glyph fallback follows TMP font-asset/global fallback lists.
 
 Screen-space text supports the same scaling modes and formulas as Unity's **Canvas Scaler**: Constant Pixel Size, Scale With Screen Size (Match Width Or Height / Expand / Shrink), and Constant Physical Size. Configure **UI scaling** on the manager, or assign an existing screen-space Canvas to use its root Canvas's actual scale factor. The default remains 1920×1080 with Match 0.5. Scaling changes apply to live screen text without rebuilding labels; world-space text retains world units and perspective.
 

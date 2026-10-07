@@ -15,7 +15,6 @@ namespace BurstWord.BRG
             public string sample;
             public Token[] tokens;
             public TMP_FontAsset font;
-            public Material material;
             public Color color;
             public float size;
             public bool rich;
@@ -65,7 +64,6 @@ namespace BurstWord.BRG
                 if (c == '>') tag = false;
             }
             hash = unchecked((hash ^ (ulong)BrgObjectIdentity.Of(LayoutFont)) * 1099511628211UL);
-            hash = unchecked((hash ^ (ulong)(LayoutMaterial != null ? BrgObjectIdentity.Of(LayoutMaterial) : 0)) * 1099511628211UL);
             hash = unchecked((hash ^ (uint)LayoutFontSize.GetHashCode()) * 1099511628211UL);
             return unchecked((hash ^ (uint)color.GetHashCode()) * 1099511628211UL);
         }
@@ -73,7 +71,7 @@ namespace BurstWord.BRG
         {
             entry = null;
             return text.Length <= 512 && parsedMessages.TryGetValue(ParsedHash(text, color), out entry) &&
-                ReferenceEquals(entry.font, LayoutFont) && ReferenceEquals(entry.material, LayoutMaterial) &&
+                ReferenceEquals(entry.font, LayoutFont) &&
                 entry.size == LayoutFontSize && entry.color.Equals(color) && entry.rich == richText && MatchesPrepared(entry.sample, text);
         }
 
@@ -90,7 +88,7 @@ namespace BurstWord.BRG
                             if (c >= '0' && c <= '9') return Parse(text, color);
             ulong hash = ParsedHash(text, color);
             if (parsedMessages.TryGetValue(hash, out var entry) && ReferenceEquals(entry.font, LayoutFont) &&
-                ReferenceEquals(entry.material, LayoutMaterial) && entry.size == LayoutFontSize && entry.color.Equals(color) &&
+                entry.size == LayoutFontSize && entry.color.Equals(color) &&
                 entry.rich == richText && MatchesPrepared(entry.sample, text))
             {
                 if (!useMeasuredLayout)
@@ -150,7 +148,7 @@ namespace BurstWord.BRG
             { InvalidatePreparationTemplates(); parsedMessages.Clear(); parsedTokenCount = 0; wrappedLines.Clear(); wrappedLineGlyphCount = 0; measuredPlans.Clear(); measuredPlanGlyphCount = 0; measuredRunCache.Clear(); measuredRunGlyphCount = 0; }
             if (parsedMessages.TryGetValue(hash, out entry)) parsedTokenCount -= entry.tokens.Length;
             entry = new ParsedMessage { sample = text, tokens = tokens.ToArray(), font = LayoutFont,
-                material = LayoutMaterial, color = color, size = LayoutFontSize, rich = richText, digitPrefix = new int[tokens.Count + 1], points = new uint[tokens.Count] };
+                color = color, size = LayoutFontSize, rich = richText, digitPrefix = new int[tokens.Count + 1], points = new uint[tokens.Count] };
             for (int i = 0; i < tokens.Count; i++) entry.points[i] = tokens[i].unicode;
             for (int i = 0; i < tokens.Count; i++) entry.digitPrefix[i + 1] = entry.digitPrefix[i] +
                 (tokens[i].unicode >= '0' && tokens[i].unicode <= '9' ? 1 : 0);

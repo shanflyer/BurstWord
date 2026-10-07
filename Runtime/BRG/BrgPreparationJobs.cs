@@ -28,7 +28,8 @@ namespace BurstWord.BRG
         public int PreparationBatchFrame { get; private set; } = -1;
         public long FailedLayoutCount { get; private set; }
 
-        /// <summary>Font, Material, FontSize and Animation can override the manager per request.
+        /// <summary>Font/FontIndex, FontSize and Animation can override the manager per request.
+        /// Font takes priority; otherwise FontIndex 0 selects the default and 1..N the font list.
         /// A target pose is local to Target; a pose without Target is in world space.
         /// WrapWidth is per request. Requests are committed in input order in this frame.</summary>
         public struct TextEmission
@@ -42,7 +43,7 @@ namespace BurstWord.BRG
             public float AnimationAmplitude;
             public bool UseLegacyAnimation;
             public TMP_FontAsset Font;
-            public Material Material;
+            public int FontIndex;
             public int FontSize;
             public TextAnchor? Alignment;
             public Vector2? TextAreaSize;
@@ -50,25 +51,18 @@ namespace BurstWord.BRG
                 float horizontalDrift, float durationScale, Transform target,
                 BrgTextAnimation animation, float animationAmplitude, bool useLegacyAnimation)
                 : this(text, color, pose, wrapWidth, horizontalDrift, durationScale, target,
-                    animation, animationAmplitude, useLegacyAnimation, null, null, 0) { }
-
-            public TextEmission(string text, Color color, TextPose pose, float wrapWidth,
-                float horizontalDrift, float durationScale, Transform target,
-                BrgTextAnimation animation, float animationAmplitude, bool useLegacyAnimation,
-                TMP_FontAsset font, Material material, int fontSize)
-                : this(text, color, pose, wrapWidth, horizontalDrift, durationScale, target,
-                    animation, animationAmplitude, useLegacyAnimation, font, material, fontSize, alignment: null) { }
+                    animation, animationAmplitude, useLegacyAnimation, null, 0) { }
 
             public TextEmission(string text, Color color, TextPose pose, float wrapWidth = 0,
                 float horizontalDrift = 0, float durationScale = 1, Transform target = null,
                 BrgTextAnimation animation = null, float animationAmplitude = 1, bool useLegacyAnimation = false,
-                TMP_FontAsset font = null, Material material = null, int fontSize = 0,
-                TextAnchor? alignment = null, Vector2? textAreaSize = null)
+                TMP_FontAsset font = null, int fontSize = 0,
+                TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0)
             {
                 Text = text; Color = color; Pose = pose; Target = target; WrapWidth = wrapWidth;
                 HorizontalDrift = horizontalDrift; DurationScale = durationScale;
                 Animation = animation; AnimationAmplitude = animationAmplitude; UseLegacyAnimation = useLegacyAnimation;
-                Font = font; Material = material; FontSize = fontSize;
+                Font = font; FontIndex = fontIndex; FontSize = fontSize;
                 Alignment = alignment; TextAreaSize = textAreaSize;
             }
         }
@@ -245,14 +239,16 @@ namespace BurstWord.BRG
             if (requests == null || count < 0 || count > requests.Length || (handles != null && handles.Length < count))
                 throw new ArgumentException("Invalid text batch range.");
             if (preparingBatch) throw new InvalidOperationException("Nested text batches are not supported.");
+            // Validate the whole range before committing any text.
+            for (int i = 0; i < count; i++) if (requests[i].Font == null) GetFont(requests[i].FontIndex);
             JobPreparedLastBatch = JobFallbackLastBatch = 0; PreparationJobWaitMilliseconds = InstanceJobWaitMilliseconds = 0;
             PreparationBatchFrame = Time.frameCount;
             float savedWidth = wrapWidth;
             try
             {
-                bool legacyNumbers = !useNumericGeometryCache && DefaultLayoutMaterial == null;
+                bool legacyNumbers = !useNumericGeometryCache;
                 for (int i = 0; legacyNumbers && i < count; i++) legacyNumbers = requests[i].Font == null &&
-                    requests[i].Material == null && requests[i].FontSize <= 0 && requests[i].WrapWidth <= 0 && IsBasicNumber(requests[i].Text);
+                    requests[i].FontIndex == 0 && requests[i].FontSize <= 0 && requests[i].WrapWidth <= 0 && IsBasicNumber(requests[i].Text);
                 if (!enablePreparationJobs || !useMeasuredLayout || count < 16 || legacyNumbers)
                 {
                     for (int i = 0; i < count; i++)
@@ -260,7 +256,7 @@ namespace BurstWord.BRG
                         var request = requests[i]; wrapWidth = request.WrapWidth;
                         var handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.DurationScale,
                             request.UseLegacyAnimation ? null : request.Animation ?? ActiveDefaultAnimation, request.AnimationAmplitude, true,
-                            request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize);
+                            request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex);
                         if (handles != null) handles[i] = handle;
                     }
                     return;
@@ -277,7 +273,7 @@ namespace BurstWord.BRG
                     for (int i = 0; i < count; i++)
                     {
                         var request = requests[i]; wrapWidth = request.WrapWidth;
-                        using var appearance = new EmissionAppearanceScope(this, request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize);
+                        using var appearance = new EmissionAppearanceScope(this, request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex);
                         preparationQueue[i] = new QueuedPreparation { request = request };
                         preparationRequests[i] = default; preparationResults[i] = default;
                         if (handles != null) handles[i] = default;
@@ -347,7 +343,7 @@ namespace BurstWord.BRG
                 {
                     var queued = preparationQueue[i]; if (!queued.ready) continue;
                     var request = queued.request; wrapWidth = request.WrapWidth;
-                    using var appearance = new EmissionAppearanceScope(this, request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize);
+                    using var appearance = new EmissionAppearanceScope(this, request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex);
                     TextHandle handle;
                     if (queued.template != null && preparationResults[i].valid == 0)
                     {
@@ -357,7 +353,7 @@ namespace BurstWord.BRG
                         reusedBatchMeasurementOffset = queued.measurement;
                         try { handle = EmitSpatial(request.Text, request.Color, request.Target, request.Pose, request.HorizontalDrift, request.DurationScale,
                             request.UseLegacyAnimation ? null : request.Animation ?? ActiveDefaultAnimation, request.AnimationAmplitude, true,
-                            request.Font, request.Material, request.FontSize, request.Alignment, request.TextAreaSize); }
+                            request.Font, request.FontSize, request.Alignment, request.TextAreaSize, request.FontIndex); }
                         finally { reusedBatchMeasurement = null; }
                     }
                     else

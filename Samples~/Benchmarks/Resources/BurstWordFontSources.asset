@@ -29,3 +29,9 @@ MonoBehaviour:
     openTypeData: {fileID: 4900000, guid: 084875739fceae14ebf3e50fecd4f887, type: 3}
   - font: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
     openTypeData: {fileID: 4900000, guid: 7d143359f2ed846419b3bb58b121bb75, type: 3}
+  - font: {fileID: 11400000, guid: 55d5681d24819b04daea115d668a2f23, type: 2}
+    openTypeData: {fileID: 4900000, guid: 7d143359f2ed846419b3bb58b121bb75, type: 3}
+  - font: {fileID: 11400000, guid: affa29e8b45a5ad468eea92ba4cb93c2, type: 2}
+    openTypeData: {fileID: 4900000, guid: d673867cc891ee842918c65b09fb0526, type: 3}
+  - font: {fileID: 11400000, guid: 6db44434982866f49b1340f0b2178ec7, type: 2}
+    openTypeData: {fileID: 4900000, guid: d673867cc891ee842918c65b09fb0526, type: 3}
