@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- Group default font, font size and optional additional fonts together in the manager Inspector; clarify that TMP font-asset fallback lists already work without additional registration.
+
 ## 0.3.3
 
 - Add horizontal left/center/right and vertical top/middle/bottom alignment, preserving centered emission-point alignment by default.

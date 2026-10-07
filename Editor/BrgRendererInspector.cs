@@ -41,12 +41,27 @@ namespace BurstWord.Baseline.Editor
             serializedObject.Update();
             resourceChanges = false;
             using (new EditorGUI.DisabledScope(true)) Field("m_Script", "Script");
-            EditorGUILayout.LabelField("Required settings", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Fonts", EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
-            Field("font", "Font", "Default TMP Font Asset. Individual emissions can override it.");
-            Field("worldCamera", "Camera", "The camera that displays this manager's text.");
+            Field("font", "Default Font", "Default TMP Font Asset. Its own fallback font assets are used automatically. Individual emissions can override it.");
             resourceChanges |= EditorGUI.EndChangeCheck();
             Field("fontSize", "Font Size");
+            if (Section(ref fonts, "Additional fonts (optional)"))
+            {
+                EditorGUI.BeginChangeCheck(); Field("useAdditionalFonts", "Use Additional Fonts");
+                if (serializedObject.FindProperty("useAdditionalFonts").boolValue)
+                {
+                    EditorGUILayout.HelpBox("Extra fonts for <font> tag lookup and additional missing-glyph lookup. The Default Font's own fallback list is already supported; do not duplicate it here. Direct font: arguments require no registration.", MessageType.Info);
+                    Field("additionalFonts", "Additional Fonts");
+                }
+                resourceChanges |= EditorGUI.EndChangeCheck();
+            }
+
+            EditorGUILayout.Space(5);
+            EditorGUILayout.LabelField("Required settings", EditorStyles.boldLabel);
+            EditorGUI.BeginChangeCheck();
+            Field("worldCamera", "Camera", "The camera that displays this manager's text.");
+            resourceChanges |= EditorGUI.EndChangeCheck();
             Field("lifetime", "Lifetime (seconds)");
             using (new EditorGUI.DisabledScope(Application.isPlaying)) Field("capacity", "Maximum Live Labels");
             DrawPipeline();
@@ -73,16 +88,6 @@ namespace BurstWord.Baseline.Editor
             }
             if (selected) Field("wrapWidth", "Wrap Width", "Maximum line width in layout units. An enabled fixed text area can reduce this to its width.");
 
-            if (Section(ref fonts, "Additional fonts (optional)"))
-            {
-                EditorGUI.BeginChangeCheck(); Field("useAdditionalFonts", "Use Additional Fonts");
-                if (serializedObject.FindProperty("useAdditionalFonts").boolValue)
-                {
-                    EditorGUILayout.HelpBox("Fallback fonts and <font> tag lookup. Direct font: arguments do not require registration here.", MessageType.Info);
-                    Field("additionalFonts", "Additional Fonts");
-                }
-                resourceChanges |= EditorGUI.EndChangeCheck();
-            }
             if (Section(ref materials, "Font material effects (optional)"))
             {
                 EditorGUI.BeginChangeCheck(); Field("useMaterialPresets", "Use Default / Tag Material Overrides");

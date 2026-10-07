@@ -136,7 +136,7 @@ damageText.EmitBatch(requests, 2);
 基础字体、相机、字号、寿命、容量和管线状态直接显示。其余按功能分组：
 
 - **Automatic Wrapping**：关闭时隐藏 Wrap Width；关闭实际设置为不自动换行。
-- **Additional fonts**：开启 Use Additional Fonts 后才显示列表，用于自动 fallback 和 `<font>` 标签。
+- **Fonts**：Default Font、字号和 Additional Fonts 放在同一组。默认字体资源自身的 Fallback Font Assets 自动生效，不需要重复登记；开启 Use Additional Fonts 后显示额外字体列表，也供 `<font>` 标签按名称查找。
 - **Font material effects**：开启默认/标签材质覆盖后显示预设。关闭后保留配置；直接 `material:` 参数仍可使用。
 - **Sprites and emoji**：关闭时隐藏图集及文本到 Sprite 的映射，并停止这些 Sprite 替换。
 - **Text layout and optional shaping**：关闭塑形时隐藏适配器设置；没有选择适配器时隐藏连字和字体源覆盖。
