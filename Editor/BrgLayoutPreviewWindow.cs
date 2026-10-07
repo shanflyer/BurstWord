@@ -22,6 +22,12 @@ namespace BurstWord.Baseline.Editor
         [SerializeField] private int fontIndex;
         [SerializeField] private int effectIndex;
         [SerializeField] private Vector4 effectParameters;
+        [SerializeField] private int animationIndex;
+        [SerializeField] private float duration = 1.5f, progress;
+        [SerializeField] private bool showGuides = true;
+        private bool playing;
+        private double previousTick;
+        private UnityEditor.Editor materialEditor;
         [SerializeField] private bool autoFit = true;
         [SerializeField] private float zoom = 1;
         [SerializeField] private Vector2 pan;
@@ -40,9 +46,17 @@ namespace BurstWord.Baseline.Editor
         private static readonly Color GlyphColor = new Color(1, .8f, .3f);
         private static readonly Color WrapColor = new Color(.95f, .5f, .85f);
 
+        [MenuItem("Tools/BurstWord/Preview")]
+        public static void ShowWindow()
+        {
+            var renderer = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponent<BrgDamageTextRenderer>() : null;
+            var window = GetWindow<BrgLayoutPreviewWindow>("BurstWord Preview");
+            if (renderer != null) window.SetSource(renderer); window.Show();
+        }
+
         public static void Open(BrgDamageTextRenderer renderer)
         {
-            var window = GetWindow<BrgLayoutPreviewWindow>("BurstWord Layout");
+            var window = GetWindow<BrgLayoutPreviewWindow>("BurstWord Preview");
             window.minSize = new Vector2(820, 550);
             window.SetSource(renderer); window.Show();
         }
@@ -50,6 +64,7 @@ namespace BurstWord.Baseline.Editor
         private void OnEnable()
         {
             minSize = new Vector2(820, 550);
+            previousTick = EditorApplication.timeSinceStartup;
             EditorApplication.update += Poll;
             EditorApplication.projectChanged += Invalidate;
             EditorApplication.playModeStateChanged += PlayModeChanged;
@@ -70,18 +85,31 @@ namespace BurstWord.Baseline.Editor
         }
 
         private void PlayModeChanged(PlayModeStateChange state) { DisposePreview(); Invalidate(); }
-        private void DisposePreview() { preview?.Dispose(); preview = null; }
+        private void DisposePreview()
+        {
+            preview?.Dispose(); preview = null;
+            if (materialEditor != null) Object.DestroyImmediate(materialEditor); materialEditor = null;
+        }
         private void Invalidate() { configuration = null; dirty = true; error = null; Repaint(); }
         private void SetSource(BrgDamageTextRenderer value)
         {
             if (source == value && preview != null) return;
             source = value; fontIndex = effectIndex = 0; effectParameters = Vector4.zero; pan = Vector2.zero;
+            animationIndex = 0; progress = 0; playing = false;
             if (source != null && source.wrapWidth > 0) lastWrapWidth = source.wrapWidth;
             DisposePreview(); Invalidate();
         }
 
         private void Poll()
         {
+            double now = EditorApplication.timeSinceStartup;
+            if (playing)
+            {
+                progress = Mathf.Clamp01(progress + (float)Math.Max(0, now - previousTick) / Mathf.Max(.01f, duration));
+                if (progress >= 1) playing = false;
+                Repaint();
+            }
+            previousTick = now;
             if (EditorApplication.timeSinceStartup < nextPoll) return;
             nextPoll = EditorApplication.timeSinceStartup + .2;
             if (source == null) { if (preview != null) { DisposePreview(); Repaint(); } return; }
@@ -113,6 +141,15 @@ namespace BurstWord.Baseline.Editor
                 if (asset.fallbackSpriteAssets != null) foreach (var fallback in asset.fallbackSpriteAssets) Sprite(fallback);
             }
             if (source.shaderEffects != null) foreach (var shader in source.shaderEffects) Add(shader);
+            if (source.effectMaterials != null) foreach (var material in source.effectMaterials)
+                if (Add(material))
+                {
+                    Add(material.shader);
+                    // Reimporting a texture also refreshes its preview.
+                    foreach (string property in material.GetTexturePropertyNames()) Add(material.GetTexture(property));
+                }
+            if (source.animations != null) foreach (var animation in source.animations)
+                if (Add(animation)) Add(animation.animationClip);
             Font(source.font);
             if (source.fonts != null) foreach (var font in source.fonts) Font(font);
             if (TMP_Settings.fallbackFontAssets != null) foreach (var font in TMP_Settings.fallbackFontAssets) Font(font);
@@ -137,7 +174,7 @@ namespace BurstWord.Baseline.Editor
             }
             if (source == null)
             {
-                EditorGUILayout.HelpBox("Select a BurstWord manager, or open this window from Text Layout → Open Layout Preview.", MessageType.Info);
+                EditorGUILayout.HelpBox("Select a BurstWord manager, or use Preview → Open Preview in its Inspector.", MessageType.Info);
                 return;
             }
             using (new EditorGUILayout.HorizontalScope())
@@ -160,17 +197,46 @@ namespace BurstWord.Baseline.Editor
                 var names = new string[count]; names[0] = "[0] " + (source.font != null ? source.font.name : "Default (unassigned)");
                 for (int i = 1; i < count; i++) names[i] = "[" + i + "] " + (source.fonts[i - 1] != null ? source.fonts[i - 1].name : "Empty");
                 fontIndex = EditorGUILayout.Popup("Preview Font", Mathf.Clamp(fontIndex, 0, count - 1), names);
-                int effectCount = source.shaderEffects?.Length ?? 0;
+                int effectCount = source.EffectCount;
                 if (effectCount > 0)
                 {
                     var effects = new string[effectCount + 1]; effects[0] = "Built-in";
-                    for (int i = 0; i < effectCount; i++) effects[i + 1] = "[" + i + "] " + (source.shaderEffects[i] != null ? source.shaderEffects[i].name : "Built-in");
-                    effectIndex = EditorGUILayout.Popup("Preview Shader", Mathf.Clamp(effectIndex + 1, 0, effectCount), effects) - 1;
-                    if (effectIndex >= 0 && source.shaderEffects[effectIndex] != null)
+                    for (int i = 0; i < effectCount; i++)
+                    {
+                        var material = source.GetEffectMaterial(i); var shader = source.GetShaderEffect(i);
+                        effects[i + 1] = "[" + i + "] " + (material != null ? material.name : shader != null ? shader.name : "Built-in");
+                    }
+                    effectIndex = EditorGUILayout.Popup("Effect Material", Mathf.Clamp(effectIndex + 1, 0, effectCount), effects) - 1;
+                    if (effectIndex >= 0 && source.GetShaderEffect(effectIndex) != null)
                         effectParameters = EditorGUILayout.Vector4Field("Effect Parameters", effectParameters);
                 }
                 else effectIndex = 0;
+                int animationCount = source.animations?.Length ?? 0;
+                var animationNames = new string[animationCount + 1]; animationNames[0] = "Built-in rise / fade";
+                for (int i = 0; i < animationCount; i++) animationNames[i + 1] = "[" + i + "] " + (source.animations[i] != null ? source.animations[i].name : "Built-in rise / fade");
+                animationIndex = animationCount > 0 ? EditorGUILayout.Popup("Animation", Mathf.Clamp(animationIndex + 1, 0, animationCount), animationNames) - 1 : -1;
+                duration = Mathf.Max(.01f, EditorGUILayout.FloatField("Duration (seconds)", duration));
+                if (float.IsNaN(duration) || float.IsInfinity(duration)) duration = 1.5f;
                 if (EditorGUI.EndChangeCheck()) { dirty = true; error = null; }
+                EditorGUILayout.Space(5);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("Play Once")) { progress = 0; playing = true; previousTick = EditorApplication.timeSinceStartup; Repaint(); }
+                    using (new EditorGUI.DisabledScope(!playing))
+                        if (GUILayout.Button("Pause")) playing = false;
+                    if (GUILayout.Button("Reset")) { progress = 0; playing = false; Repaint(); }
+                }
+                EditorGUI.BeginChangeCheck();
+                progress = EditorGUILayout.Slider("Time", progress, 0, 1);
+                if (EditorGUI.EndChangeCheck()) { playing = false; Repaint(); }
+                EditorGUILayout.LabelField((progress * duration).ToString("0.00") + " / " + duration.ToString("0.00") + " seconds", EditorStyles.miniLabel);
+                var selectedMaterial = source.GetEffectMaterial(effectIndex);
+                if (selectedMaterial != null)
+                {
+                    EditorGUILayout.Space(6); EditorGUILayout.LabelField("Material Properties", EditorStyles.boldLabel);
+                    EditorGUILayout.HelpBox("Edits update the selected material asset and this preview. TMP font effects remain active.", MessageType.None);
+                    if (BrgShaderEffectCreator.DrawMaterialProperties(selectedMaterial, ref materialEditor)) Invalidate();
+                }
                 EditorGUILayout.Space(8);
                 EditorGUILayout.LabelField("Manager Layout", EditorStyles.boldLabel);
                 // These are the manager's actual serialized settings, with normal Undo support.
@@ -204,6 +270,7 @@ namespace BurstWord.Baseline.Editor
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
+                showGuides = GUILayout.Toggle(showGuides, "Layout Guides", EditorStyles.toolbarButton, GUILayout.Width(95));
                 bool fit = GUILayout.Toggle(autoFit, "Auto Fit", EditorStyles.toolbarButton, GUILayout.Width(65));
                 if (fit != autoFit) { autoFit = fit; dirty = true; }
                 if (GUILayout.Button("Reset View", EditorStyles.toolbarButton, GUILayout.Width(80))) { autoFit = true; pan = Vector2.zero; dirty = true; }
@@ -225,6 +292,7 @@ namespace BurstWord.Baseline.Editor
                 if (Event.current.type == EventType.Repaint && error == null)
                 {
                     EnsurePreview();
+                    preview.SelectPlayback(animationIndex, duration, progress);
                     if (dirty)
                     {
                         preview.SelectEffect(effectIndex, effectParameters);
@@ -234,7 +302,7 @@ namespace BurstWord.Baseline.Editor
                     if (autoFit && !draggingArea) Fit(canvas);
                 }
             }
-            catch (Exception exception) { DisposePreview(); error = exception.Message; dirty = false; }
+            catch (Exception exception) { DisposePreview(); error = exception.Message; dirty = false; playing = false; }
             if (preview == null || error != null)
             {
                 GUI.Box(canvas, GUIContent.none);
@@ -247,9 +315,9 @@ namespace BurstWord.Baseline.Editor
             if (Event.current.type == EventType.Repaint)
             {
                 try { GUI.DrawTexture(canvas, preview.Render(canvas.size, zoom, pan, EditorGUIUtility.pixelsPerPoint), ScaleMode.StretchToFill, false); }
-                catch (Exception exception) { DisposePreview(); error = exception.Message; Repaint(); DrawFooter(footer); return; }
+                catch (Exception exception) { DisposePreview(); error = exception.Message; playing = false; Repaint(); DrawFooter(footer); return; }
                 GUI.BeginClip(canvas);
-                DrawGuides(new Rect(Vector2.zero, canvas.size));
+                if (showGuides) DrawGuides(new Rect(Vector2.zero, canvas.size));
                 GUI.EndClip();
             }
             HandleAreaResize(canvas);
@@ -278,6 +346,7 @@ namespace BurstWord.Baseline.Editor
             Rect extent = new Rect(-20, -20, 40, 40);
             if (source.useTextArea) extent = Union(extent, Area);
             if (preview.HasBounds) extent = Union(extent, preview.Bounds);
+            if (preview.HasBounds) extent = Union(extent, preview.MotionBounds);
             if (EffectiveWrap > 0) extent = Union(extent, new Rect(WrapStart(), -20, EffectiveWrap, 40));
             zoom = Mathf.Clamp(Mathf.Min(Mathf.Max(1, canvas.width - 100) / Mathf.Max(1, extent.width),
                 Mathf.Max(1, canvas.height - 90) / Mathf.Max(1, extent.height)), .02f, 8);
@@ -387,8 +456,12 @@ namespace BurstWord.Baseline.Editor
         private Color color;
         private int fontIndex, effectIndex;
         private Vector4 effectParameters;
+        private int animationIndex = -1;
+        private float duration = 100, progress;
         internal BrgDamageTextRenderer Renderer { get; private set; }
         internal Rect Bounds { get; private set; }
+        internal Rect MotionBounds { get; private set; }
+        private readonly Color[] motionSamples = new Color[BrgTextAnimation.SampleCount * BrgTextAnimation.Rows];
         internal bool HasBounds { get; private set; }
         internal Vector2 LayoutSize { get; private set; }
         internal int LineCount { get; private set; }
@@ -421,6 +494,13 @@ namespace BurstWord.Baseline.Editor
                 root.SetActive(false); root.layer = 31; SceneManager.MoveGameObjectToScene(root, scene);
                 Renderer = root.AddComponent<BrgDamageTextRenderer>();
                 EditorJsonUtility.FromJsonOverwrite(configuration, Renderer);
+                // JSON may not retain application-created, unsaved asset references.
+                // The preview reads the actual resources without changing their lists.
+                Renderer.font = source.font; Renderer.fonts = source.fonts;
+                Renderer.effectMaterials = source.effectMaterials; Renderer.shaderEffects = source.shaderEffects;
+                Renderer.animations = source.animations;
+                Renderer.spriteAsset = source.spriteAsset; Renderer.additionalSpriteAssets = source.additionalSpriteAssets;
+                Renderer.fontSources = source.fontSources;
                 Renderer.SetTextShaperProvider(source.EditorTextShaper);
                 Renderer.capacity = 4; Renderer.worldCamera = camera; Renderer.enabled = true;
                 // Single-label editor view: use our existing instancing path, which shares
@@ -430,7 +510,6 @@ namespace BurstWord.Baseline.Editor
                 Renderer.spaceMode = BrgDamageTextRenderer.SpaceMode.ScreenSnapshot;
                 Renderer.sortingMode = BrgDamageTextRenderer.SortingMode.AlwaysInFront;
                 Renderer.scalingCanvas = null; Renderer.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize; Renderer.scaleFactor = 1;
-                Renderer.animations = Array.Empty<BrgTextAnimation>(); Renderer.risePixels = 0;
                 root.SetActive(true); Renderer.EditorPreviewFrame(0);
                 if (!Renderer.IsInitialized) throw new InvalidOperationException("Could not initialize the layout preview renderer.");
             }
@@ -440,11 +519,42 @@ namespace BurstWord.Baseline.Editor
         internal void SelectEffect(int index, Vector4 parameters)
         { effectIndex = index; effectParameters = parameters; }
 
+        internal void SelectPlayback(int index, float seconds, float normalizedTime)
+        { animationIndex = index; duration = Mathf.Max(.01f, seconds); progress = Mathf.Clamp01(normalizedTime); }
+
         internal void Measure(string content, Color tint, int selectedFont)
         {
             text = content; color = tint; fontIndex = selectedFont;
             Emit(Vector3.zero);
             HasBounds = Renderer.EditorTryGetLayoutBounds(out Rect bounds); Bounds = HasBounds ? bounds : default;
+            MotionBounds = Bounds;
+            if (HasBounds)
+            {
+                var animation = animationIndex >= 0 ? Renderer.GetAnimation(animationIndex) : null;
+                if (animation == null)
+                {
+                    var moved = Bounds; moved.y += Renderer.risePixels;
+                    MotionBounds = Rect.MinMaxRect(Mathf.Min(Bounds.xMin, moved.xMin), Mathf.Min(Bounds.yMin, moved.yMin), Mathf.Max(Bounds.xMax, moved.xMax), Mathf.Max(Bounds.yMax, moved.yMax));
+                }
+                else
+                {
+                    animation.Bake(motionSamples, 0);
+                    Vector2 min = Bounds.min, max = Bounds.max;
+                    for (int i = 0; i < BrgTextAnimation.SampleCount; i++)
+                    {
+                        var geometry = motionSamples[i]; float angle = motionSamples[i + BrgTextAnimation.SampleCount].r;
+                        float sine = Mathf.Sin(angle), cosine = Mathf.Cos(angle);
+                        for (int corner = 0; corner < 4; corner++)
+                        {
+                            float x = ((corner & 1) == 0 ? Bounds.xMin : Bounds.xMax) * geometry.b;
+                            float y = ((corner & 2) == 0 ? Bounds.yMin : Bounds.yMax) * geometry.a;
+                            var point = new Vector2(cosine * x - sine * y + geometry.r, sine * x + cosine * y + geometry.g);
+                            min = Vector2.Min(min, point); max = Vector2.Max(max, point);
+                        }
+                    }
+                    MotionBounds = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+                }
+            }
             bool anyText = !string.IsNullOrEmpty(text);
             LayoutSize = anyText ? Renderer.LastLayoutSize : Vector2.zero;
             LineCount = anyText ? Renderer.LastLayoutLineCount : 0; GlyphCount = Renderer.ActiveGlyphCount;
@@ -454,7 +564,9 @@ namespace BurstWord.Baseline.Editor
         {
             Renderer.Clear(); Renderer.ResetCounters(); Renderer.EditorPreviewFrame(0);
             if (!string.IsNullOrEmpty(text))
-                Renderer.EmitText(position, text, color, duration: 100, fontIndex: fontIndex, useLegacyAnimation: true, effectIndex: effectIndex, effectParameters: effectParameters);
+                Renderer.EmitText(position, text, color, duration: duration, fontIndex: fontIndex,
+                    useLegacyAnimation: animationIndex < 0, animationIndex: Mathf.Max(0, animationIndex),
+                    effectIndex: effectIndex, effectParameters: effectParameters);
         }
 
         internal RenderTexture Render(Vector2 size, float zoom, Vector2 pan, float pixelsPerPoint)
@@ -464,7 +576,7 @@ namespace BurstWord.Baseline.Editor
             Resize(Mathf.Max(1, Mathf.RoundToInt(size.x * density)), Mathf.Max(1, Mathf.RoundToInt(size.y * density)));
             Renderer.scaleFactor = zoom * density;
             Vector3 position = camera.ScreenToWorldPoint(new Vector3(target.width * .5f + pan.x * density, target.height * .5f - pan.y * density, 10));
-            Emit(position); Renderer.EditorPreviewFrame(0);
+            Emit(position); Renderer.EditorPreviewFrame(Mathf.Min(progress, .999999f) * duration);
             bool asynchronous = ShaderUtil.allowAsyncCompilation;
             try
             {

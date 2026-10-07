@@ -2,3 +2,4 @@ Unicode algorithms only; no Skia dependency.
 https://github.com/toptensoftware/RichTextKit
 Commit: e28a3f583a0d9b2221baab25b730f3bc5a863d35
 Local modification: trie resources loaded from Unity Resources instead of assembly embedded resources.
+Local modification: namespaces changed to BurstWord.Internal.RichTextKit to avoid collisions.

@@ -13,6 +13,9 @@ namespace BurstWord.Baseline.Editor
         private ReorderableList fontList, animationList, effectList;
         private float lastWrapWidth = 400;
         private bool resourceChanges;
+        private UnityEditor.Editor effectEditor;
+
+        private void OnDisable() { if (effectEditor != null) DestroyImmediate(effectEditor); effectEditor = null; }
 
         private void OnEnable()
         {
@@ -53,7 +56,7 @@ namespace BurstWord.Baseline.Editor
 
         private void ConfigureEffectList()
         {
-            effectList = new ReorderableList(serializedObject, serializedObject.FindProperty("shaderEffects"), true, true, true, true);
+            effectList = new ReorderableList(serializedObject, serializedObject.FindProperty("effectMaterials"), true, true, true, true);
             effectList.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Shader Effects (index 0 = default)");
             effectList.elementHeight = EditorGUIUtility.singleLineHeight * 2 + 10;
             effectList.drawElementCallback = (rect, index, active, focused) =>
@@ -62,11 +65,11 @@ namespace BurstWord.Baseline.Editor
                 var property = effectList.serializedProperty.GetArrayElementAtIndex(index);
                 var edit = new Rect(rect.xMax - 45, rect.y, 45, rect.height); rect.width -= 51;
                 DrawIndexedAsset(rect, property, index, "Empty uses the built-in shader.");
-                var shader = property.objectReferenceValue as Shader;
-                using (new EditorGUI.DisabledScope(shader == null))
-                    if (GUI.Button(edit, "Edit")) AssetDatabase.OpenAsset(shader);
+                var material = property.objectReferenceValue as Material;
+                using (new EditorGUI.DisabledScope(material == null))
+                    if (GUI.Button(edit, "Edit")) { effectList.index = index; EditorGUIUtility.PingObject(material); }
                 rect.y += EditorGUIUtility.singleLineHeight + 3; rect.width += 51;
-                var report = BrgShaderEffectCreator.Report(shader);
+                var report = BrgShaderEffectCreator.Report(material != null ? material.shader : null);
                 var style = new GUIStyle(EditorStyles.miniLabel);
                 if (report.type == MessageType.Error) style.normal.textColor = new Color(1, .3f, .3f);
                 else if (report.type == MessageType.Warning) style.normal.textColor = new Color(1, .65f, .15f);
@@ -136,18 +139,44 @@ namespace BurstWord.Baseline.Editor
             {
                 using (new EditorGUI.DisabledScope(Application.isPlaying)) effectList.DoLayoutList();
                 EditorGUILayout.LabelField("Empty lists / slots use built-in shading. effectIndex: -1 always selects built-in.", EditorStyles.wordWrappedMiniLabel);
+                if ((renderer.effectMaterials == null || renderer.effectMaterials.Length == 0) && renderer.shaderEffects?.Length > 0)
+                {
+                    EditorGUILayout.HelpBox("Existing shader entries still render. Convert them to materials to configure their custom properties.", MessageType.Info);
+                    using (new EditorGUI.DisabledScope(Application.isPlaying))
+                        if (GUILayout.Button("Convert Shader Entries to Materials"))
+                        { serializedObject.ApplyModifiedProperties(); BrgShaderEffectCreator.ConvertLegacy(renderer); serializedObject.Update(); }
+                }
                 using (new EditorGUI.DisabledScope(Application.isPlaying))
                     if (GUILayout.Button("Create Custom Effect Shader"))
                     {
                         serializedObject.ApplyModifiedProperties();
                         BrgShaderEffectCreator.CreateAndAssign(renderer);
                         serializedObject.Update();
+                        effectList.index = effectList.serializedProperty.arraySize - 1;
                     }
-                foreach (var shader in renderer.shaderEffects ?? System.Array.Empty<Shader>())
+                foreach (var material in renderer.effectMaterials ?? System.Array.Empty<Material>())
                 {
-                    var report = BrgShaderEffectCreator.Report(shader);
+                    var report = BrgShaderEffectCreator.Report(material != null ? material.shader : null);
                     if (report.type == MessageType.Error || report.type == MessageType.Warning) EditorGUILayout.HelpBox(report.text, report.type);
                 }
+                if (effectList.index >= 0 && effectList.index < effectList.serializedProperty.arraySize)
+                {
+                    var material = effectList.serializedProperty.GetArrayElementAtIndex(effectList.index).objectReferenceValue as Material;
+                    if (material != null)
+                    {
+                        EditorGUILayout.Space(4); EditorGUILayout.LabelField("Material Properties", EditorStyles.boldLabel);
+                        if (GUILayout.Button("Edit Shader")) AssetDatabase.OpenAsset(material.shader);
+                        if (BrgShaderEffectCreator.DrawMaterialProperties(material, ref effectEditor) && Application.isPlaying && renderer.IsInitialized)
+                            renderer.RefreshEffectMaterial(material);
+                    }
+                }
+                EndSection();
+            }
+            if (BeginSection("preview", "Preview"))
+            {
+                EditorGUILayout.LabelField("Preview text, materials, layout and one full animation in an isolated window.", EditorStyles.wordWrappedMiniLabel);
+                if (GUILayout.Button("Open Preview"))
+                { serializedObject.ApplyModifiedProperties(); BrgLayoutPreviewWindow.Open(renderer); }
                 EndSection();
             }
             serializedObject.ApplyModifiedProperties();
@@ -198,12 +227,6 @@ namespace BurstWord.Baseline.Editor
         private void DrawTextLayout()
         {
             resourceChanges |= DrawLayoutControls(serializedObject, ref lastWrapWidth);
-            EditorGUILayout.Space(6);
-            if (GUILayout.Button("Open Layout Preview"))
-            {
-                serializedObject.ApplyModifiedProperties();
-                BrgLayoutPreviewWindow.Open((BrgDamageTextRenderer)target);
-            }
         }
 
         internal static bool DrawLayoutControls(SerializedObject settings, ref float lastWrapWidth)

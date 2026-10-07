@@ -1,8 +1,8 @@
 {
   "name": "com.shanflyer.burstword",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "displayName": "BurstWord",
-  "description": "High-throughput TMP damage text with GPU animation, BRG and automatic instancing fallback. Standard TMP glyph typography without an external shaping library with optional shaping adapters. Unity 2022.3 and newer.",
+  "description": "High-performance damage text for Unity 2022.3 and newer URP projects. TMP fonts and sprites, animation, custom materials, BRG rendering and automatic GPU instancing fallback.",
   "unity": "2022.3",
   "license": "MIT",
   "author": {
@@ -10,7 +10,6 @@
     "url": "https://github.com/shanflyer"
   },
   "documentationUrl": "https://github.com/shanflyer/BurstWord#readme",
-  "changelogUrl": "https://github.com/shanflyer/BurstWord/blob/main/CHANGELOG.md",
   "licensesUrl": "https://github.com/shanflyer/BurstWord/blob/main/LICENSE.md",
   "dependencies": {
     "com.unity.render-pipelines.universal": "14.0.12",

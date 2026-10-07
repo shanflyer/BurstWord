@@ -44,6 +44,11 @@ CBUFFER_START(UnityPerMaterial)
     float4 _BurstResource0, _BurstResource1, _BurstResource2, _BurstResource3, _BurstResource4;
     float4 _BurstResource5, _BurstResource6, _BurstResource7, _BurstResource8, _BurstResource9;
 #endif
+    // User fields are declared in the project-owned shader, never by editing this file.
+    // Declare the same fields in every pass and backend/keyword variant.
+#ifdef BURSTWORD_MATERIAL_FIELDS
+    BURSTWORD_MATERIAL_FIELDS
+#endif
 CBUFFER_END
 #if defined(BURST_CLASSIC_INSTANCING)
 float4 BurstResource(uint index)

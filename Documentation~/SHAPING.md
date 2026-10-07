@@ -45,7 +45,7 @@ Append `TextShapingGlyph` values to the supplied reusable `List<TextShapingGlyph
 
 Return glyphs in visual order within the run. Include every glyph needed to display that run; an empty result produces no glyphs. The core validates clusters and metrics. It retains responsibility for line layout, wrapping, alignment, decorations, glyph atlas preparation, sorting and BRG/instancing rendering. Missing shaped glyphs can be added through Unity FontEngine when a compatible original font source is available; a static atlas alone cannot supply glyphs it does not contain.
 
-## Execution and performance
+## Callback execution
 
 A registered callback is used for text needing shaping, including plain numbers. No callback restores the original numeric fast paths. Sprite glyphs and tabs are handled directly by the core.
 

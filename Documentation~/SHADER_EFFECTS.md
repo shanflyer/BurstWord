@@ -8,15 +8,16 @@ executed automatically. Use **Shader Effects** for your own GPU effects.
 
 1. Open your `BrgDamageTextRenderer` Inspector → **Shader Effects**.
 2. Click **Create Custom Effect Shader** and save it inside your project's `Assets`.
-   The generated shader is added to the list. You can also use
+   A shader and material are generated together; the material is added to the list. You can also use
    **Assets → Create → BurstWord → Shader Effect** and assign it yourself.
-3. Click **Edit** beside the shader and edit the two effect functions. An untouched
+3. Select a material row to edit its properties. Click **Edit Shader** to edit its parameter
+   declarations, helper functions and two effect hooks. An untouched
    template renders like built-in shading, including the selected TMP font's effects.
 
-The list contains ordinary `Shader` assets. There is no extra effect Asset or material
-list to maintain. Index **0** selects the first/default entry. An empty list or empty
+The list contains ordinary `Material` assets, each retaining its shader, custom values,
+textures and keywords. No separate effect Asset is required. Index **0** selects the first/default entry. An empty list or empty
 slot uses built-in shading. **-1** explicitly selects built-in shading even when the
-first slot contains a custom shader. Other invalid indices throw an exception.
+first slot contains a custom material. Other invalid indices throw an exception.
 Configure the list before Play. Reordering changes the indices used by subsequent calls.
 
 ```csharp
@@ -36,10 +37,25 @@ and `TextPose` overloads. Batch requests expose `TextEmission.EffectIndex` and
 case. Each request independently selects its font, animation and shader.
 Batch shader/index/parameter validation completes before any request is emitted.
 
+Direct `effectMaterial:` takes priority over the index and needs no registration.
+Batch requests also expose `TextEmission.EffectMaterial` / constructor `effectMaterial:`.
+Query an indexed selection with `GetEffectMaterial(index)`.
+
+```csharp
+renderer.EmitText(hitPosition, "Critical 1234", Color.white,
+    fontIndex: 1, effectMaterial: dissolveMaterial);
+```
+
+Runtime draw materials are cached clones; rendering never writes to the supplied asset.
+After changing application-owned material properties, call `RefreshEffectMaterial(material)`
+to copy them into existing draw materials without rebuilding text. Inspector material
+controls refresh automatically during Play. Changing the shader on an already used
+material requires disabling/re-enabling the manager.
+
 `effectParameters` supplies **four finite numbers per label**, defaulting to zero.
 You define their meanings. They are shared by every glyph in that message and remain
-independent when messages use the same shader. Shader `Properties` alone do not make
-arbitrary parameters transfer from a TMP material; use this parameter channel.
+independent when messages use the same material. These per-label values are separate
+from the shared custom material properties below.
 
 For a handle returned by a spatial overload, update parameters without regenerating
 the text:
@@ -56,15 +72,48 @@ NaN/infinite parameters are rejected. Existing labels retain their selected shad
 
 ## Ordinary custom effects
 
-The template includes:
+**Do not edit package HLSL.** Add your parameters and algorithms only to the generated
+project-owned `.shader`. The framework remains responsible for internal buffers and passes.
 
-```hlsl
-#include "Packages/com.shanflyer.burstword/Runtime/BRG/BurstWordShaderEffects.hlsl"
+Add Float / Range / Color / Vector / Texture declarations to ShaderLab `Properties`.
+Declare numeric fields using the template's `BURSTWORD_MATERIAL_FIELDS` before its include;
+the framework places them inside the existing `UnityPerMaterial`. Do not create a second
+`UnityPerMaterial` or place material numeric fields in unrelated global/constant buffers.
+For example:
+
+```shaderlab
+_EffectColor("Effect Color", Color) = (1,1,1,1)
+_Dissolve("Dissolve", Range(0,1)) = 0
+_NoiseTex("Noise", 2D) = "white" {}
 ```
 
-The package HLSL owns instance decoding, the generated quad, glyph placement, screen
-scaling/world transforms, GPU animation, TMP/Sprite shading and opaque-depth rejection.
-Modify the template's two functions:
+```hlsl
+#define BURSTWORD_MATERIAL_FIELDS float4 _EffectColor; float4 _NoiseTex_ST; float _Dissolve;
+#include "Packages/com.shanflyer.burstword/Runtime/BRG/BurstWordShaderEffects.hlsl"
+
+TEXTURE2D(_NoiseTex);
+SAMPLER(sampler_NoiseTex);
+
+float ReadNoise(float2 uv)
+{
+    uv = uv * _NoiseTex_ST.xy + _NoiseTex_ST.zw;
+    return SAMPLE_TEXTURE2D(_NoiseTex, sampler_NoiseTex, uv).r;
+}
+```
+
+Textures/samplers are declared outside the material constant buffer. You may add helpers
+or include your own effect HLSL. Keep numeric field layout identical in both passes and
+every backend/keyword variant; do not conditionally remove fields. `_Burst*`, `_MainTex`,
+the atlas bindings and instance names belong to the framework and must not be repurposed.
+The template's `_EffectColor` starts white and is multiplied into the finished color.
+
+TMP font material extraction/copying is unchanged. Original TMP face/outline/underlay/glow
+values and atlas metrics still populate the existing font-resource data. The custom
+material supplies its own shader properties; the renderer does not copy the entire TMP
+material over it. A custom material can therefore share one dissolve effect across
+different fonts while retaining each font's native TMP effects and padding.
+
+Modify the two functions in your generated shader:
 
 ```hlsl
 void BurstWordModifyVertex(inout BurstWordEffectVertex vertex)
@@ -109,10 +158,19 @@ Keep these pragmas and the ShaderLab properties/tags/passes. The blank template 
 ready for both backends; no second effect implementation is needed. Final vertex/pixel
 hooks are isolated from the package HLSL so package updates do not overwrite your file.
 
-**Text Layout → Open Layout Preview** lets you select the shader and supply its four
-parameters. This static editor view renders through Instancing and reports a clear error
-for BRG-only shaders. Its layout guides show CPU glyph bounds before custom vertex
-displacement. The game manager's selected backend is unchanged.
+**Preview → Open Preview** (or **Tools → BurstWord → Preview**) opens the independent
+preview window. Select a font, material and animation, edit the material's custom
+properties and per-label values, then use **Play Once**, **Pause**, **Reset** or the time
+slider. Duration controls actual playback seconds. Changes to material values/textures
+refresh the rendered result; edits are to the selected material asset and support Undo.
+Auto Fit includes the selected animation's motion; Layout Guides can be hidden.
+Use the hooks' `elapsedSeconds` / `normalizedAge` for effects that must follow preview
+playback and scrubbing. Unity's global `_Time` is not overridden by this isolated view.
+
+This view renders through Instancing and reports a clear error for BRG-only shaders.
+Guides show CPU layout bounds before shader displacement and animation. It previews
+camera-facing text without game-world perspective/UI scaling and never changes the game
+manager's selected backend or clears its active text.
 
 ## Advanced: fully custom shaders
 
@@ -171,21 +229,3 @@ BRG. The template already follows these rules. The editor compatibility check fo
 Tags declare support; they cannot prove arbitrary HLSL behaves correctly. Advanced
 authors must verify both instancing variants, ordering, TMP/Sprite resources and target
 graphics APIs. The standard template handles that data contract for ordinary effects.
-
-## Cost and verification
-
-Effect selection happens after layout, so different shaders share parsing, shaping,
-numeric, wrapping and Job preparation caches. Shared materials/pages are created per
-resource/shader group, never per message. BRG parameters add 16 bytes per label and
-are uploaded when changed; built-in-only use does not allocate that parameter buffer.
-Instancing adds one `float4` instance field only for custom effects. Shader changes
-split draws while preserving whole-label order; messages are never regrouped by effect
-at the expense of transparency order. More interleaved shaders can mean more draw calls.
-
-The API and generated template are intended for Unity 2022.3 and newer with URP.
-Actual verification uses Unity 2022.3.62f3 and 6000.6.0f1 Windows D3D11 editor/player,
-both BRG and Instancing, template parity, real vertex/pixel output, parameter changes,
-mixed numeric/wrapped Job batches, single-page Job draws, three ordering modes and
-opaque-object occlusion. Windows OpenGL Core players also exercise the Instancing path.
-Other graphics APIs need
-testing on their target devices; backend declaration is not a platform test result.

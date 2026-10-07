@@ -2,7 +2,7 @@
 
 ## RichTextKit Unicode algorithms and data
 
-The Unicode bidi, line-breaking and grapheme algorithms in `Runtime/ThirdParty/RichTextKit` originate from [RichTextKit](https://github.com/toptensoftware/RichTextKit), commit `e28a3f583a0d9b2221baab25b730f3bc5a863d35`. Resource loading was adapted to Unity Resources, and namespaces were changed to `BurstWord.Internal.RichTextKit` to avoid clashes with independently installed RichTextKit. The original MIT license and provenance are retained in that directory. Trie data used by these algorithms is in `Runtime/Resources/BurstWordUnicode`.
+The Unicode bidi, line-breaking and grapheme algorithms in `Runtime/ThirdParty/RichTextKit` originate from [RichTextKit](https://github.com/toptensoftware/RichTextKit), commit `e28a3f583a0d9b2221baab25b730f3bc5a863d35`. Resource loading was adapted to Unity Resources, and namespaces were changed to `BurstWord.Internal.RichTextKit` to avoid clashes with independently installed RichTextKit. The original Apache License 2.0 copyright notice, license and provenance are retained in that directory. Trie data used by these algorithms is in `Runtime/Resources/BurstWordUnicode`.
 
 ## Sample fonts
 

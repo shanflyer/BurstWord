@@ -1,10 +1,8 @@
-# BurstWord
+# BurstWord 1.0.0
 
-High-throughput damage text for Unity, using TMP resources, BRG and GPU instancing.
+Unity damage text with TMP fonts, animations and custom material effects.
 
-BurstWord 是面向大规模战斗的高性能飘字插件，适用于 **Unity 2022.3 及后续版本（包括 Unity 6）的 URP 项目**。每条飘字只保存数据，通过 **BatchRendererGroup（BRG）** 绘制；设备无法使用 BRG 时，自动回退到底层 **GPU Instancing Draw**。
-
-运行时不为每条飘字创建 GameObject、TMP 文字组件或 Mesh。字形共用一个自动生成的四边形，字体和图片字符直接使用 TMP 资源，位移、旋转、缩放、淡出及自定义视觉效果由 GPU 执行。
+BurstWord 是面向大规模战斗的高性能飘字插件，适用于 **Unity 2022.3 及后续版本（包括 Unity 6）的 URP 项目**。支持 TMP 字体和 Sprite 资源、富文本、换行、空间跟随、遮挡、动画及自定义材质效果。
 
 ## 功能
 
@@ -14,8 +12,8 @@ BurstWord 是面向大规模战斗的高性能飘字插件，适用于 **Unity 2
 - 固定屏幕字号、位置跟随、完整三维姿态与镜头透视；屏幕缩放对齐 Canvas Scaler。
 - 整条飘字从远到近排序，支持最前显示、不透明遮挡和完整场景透明排序。
 - 独立动画编辑器，使用 AnimationClip、关键帧、曲线和操作柄制作 GPU 动画。
-- 自定义 Shader 列表、逐条参数、一键生成模板，以及共享 HLSL 扩展接口。
-- 批量发射、排版与资源缓存、Burst/Job 准备路径和增量上传。
+- 自定义效果材质列表、逐条参数、一键生成 Shader 与材质，以及固定共享 HLSL 的扩展接口。
+- 批量发射，以及每条文字独立的字体、动画、材质、寿命和排版设置。
 - 可选文字塑形委托，使用者自行接入实现或插件；不捆绑 HarfBuzz 或原生塑形库。
 
 ## 安装与首次接入
@@ -24,7 +22,7 @@ BurstWord 是面向大规模战斗的高性能飘字插件，适用于 **Unity 2
 2. 打开 **Window → Package Manager → + → Add package from git URL**，输入：
 
    ```text
-   https://github.com/shanflyer/BurstWord.git
+   https://github.com/shanflyer/BurstWord.git#v1.0.0
    ```
 
 3. 若项目还没有 TMP 基础资源，执行 **Window → TextMeshPro → Import TMP Essential Resources**。已有 TMP 字体资源可以直接使用。
@@ -67,18 +65,18 @@ public class DamageTextExample : MonoBehaviour
 
 最大同时存在数量由 **Maximum Live Labels** 限制。持续发射时，可按“每秒发射量 × 平均寿命”估算基础容量，并为瞬发留出余量。容量不足会丢弃新的请求，可在 Runtime Status 查看计数。`Emit` 和位置版 `EmitText` 返回是否成功，Transform / TextPose 版本返回可查询存活状态的句柄。
 
-## 每条选择字体、动画和 Shader
+## 每条选择字体、动画和效果材质
 
-先在 Inspector 中配置资源列表，再在发射时传编号。同一管理器可以混用多种字体、动画和 Shader。
+先在 Inspector 中配置资源列表，再在发射时传编号。同一管理器可以混用多种字体、动画和效果材质。
 
 | 参数 | 编号 | 省略或空资源时 |
 | --- | --- | --- |
 | `fontIndex` | `0` 为 Default Text Font；`1..N` 为 Additional Text Fonts | 默认使用 `0`；越界或额外字体空槽报错 |
 | `animationIndex` | 从 `0` 开始对应 Animations 列表 | 默认使用 `0`；空列表或空槽使用内置上浮、淡出 |
-| `effectIndex` | 从 `0` 开始对应 Shader Effects 列表；`-1` 明确使用内置 Shader | 默认使用 `0`；空列表或空槽使用内置 Shader |
+| `effectIndex` | 从 `0` 开始对应 Shader Effects 中的材质列表；`-1` 明确使用内置 Shader | 默认使用 `0`；空列表或空槽使用内置 Shader |
 
 ```csharp
-// 先配置字体 1、动画 2、自定义 Shader 0。
+// 先配置字体 1、动画 2、自定义效果材质 0。
 damageText.EmitText(hitPosition, "Critical 1234", Color.yellow,
     duration: 1.2f, fontSize: 40,
     fontIndex: 1, animationIndex: 2, effectIndex: 0,
@@ -92,13 +90,13 @@ damageText.Emit(hitPosition, 1234, Color.yellow,
 damageText.Emit(hitPosition, 200, Color.green, effectIndex: -1);
 ```
 
-`fontSize > 0` 覆盖本条字号，`0` 使用管理器字号。直接 `font:` / `animation:` 优先于编号。列表顺序决定后续调用的编号，已发射的文字保留选定资源。数字、字符串、Transform、TextPose 和批量接口均支持这些选择。
+`fontSize > 0` 覆盖本条字号，`0` 使用管理器字号。直接 `font:` / `animation:` / `effectMaterial:` 优先于对应编号，无需登记。列表顺序决定后续调用的编号，已发射的文字保留选定资源。数字、字符串、Transform、TextPose 和批量接口均支持这些选择。
 
 ### 字体、材质和 Emoji
 
 普通字体必须包含目标字形。缺字沿用所选 TMP 字体的 **Fallback Font Assets** 和 TMP 全局 fallback，不需要在管理器额外字体列表重复登记。额外字体列表用于代码选择和 `<font="字体资源名称">` 标签查找。
 
-**描边、阴影、发光使用所选 TMP Font Asset 自己的 Material。** 多种材质效果可以准备不同字体资源并共享同一图集，按 `fontIndex` 或直接资源选择；材质必须与图集匹配。管理器没有独立材质列表或 `material:` 参数。
+**描边、阴影、发光使用所选 TMP Font Asset 自己的 Material。** 多种材质效果可以准备不同字体资源并共享同一图集，按 `fontIndex` 或直接资源选择；材质必须与图集匹配。字体材质没有独立覆盖列表或 `material:` 参数；Shader Effects 中的材质用于额外自定义效果。
 
 BurstWord 的 Shader 实现相应 TMP 效果并读取其参数，**不会直接执行字体材质上的任意自定义 TMP Shader**。额外视觉效果走下面的 Shader Effects 接口。
 
@@ -133,7 +131,7 @@ damageText.EmitText(hitPosition, "Critical 1234", Color.yellow,
 
 省略 `alignment` / `textAreaSize` 使用管理器设置；显式传 `Vector2.zero` 可让本条使用发射点锚定。对齐与区域在发射时记录，修改默认值影响后续发射。
 
-支持的富文本标签为 `<b>`、`<i>`、`<u>`、`<s>`、`<color>`、`<alpha>`、`<size>`、`<voffset>`、`<cspace>`、`<sup>`、`<sub>`、`<nobr>`、`<font>`、`<sprite>` 和 `<br>`；它们是本插件实现的子集，不代表 TMP 所有标签均可用。可在 Text Layout 关闭 Rich Text Tags 或 Font Kerning。
+支持的富文本标签为 `<b>`、`<i>`、`<u>`、`<s>`、`<color>`、`<alpha>`、`<size>`、`<voffset>`、`<cspace>`、`<sup>`、`<sub>`、`<nobr>`、`<font>`、`<sprite>` 和 `<br>`；使用这些标签设置文字样式。可在 Text Layout 关闭 Rich Text Tags 或 Font Kerning。
 
 ### 与普通 UI 一致的大小
 
@@ -151,9 +149,11 @@ damageText.EmitText(hitPosition, "Critical 1234", Color.yellow,
 
 手动设置以相机完整显示输出或完整 Render Texture 尺寸为基准，分屏视口用于投影。缩放变化实时作用于存活的屏幕文字，无需重新排版；世界模式使用世界单位和透视，不受 UI Scaling 影响。
 
-### 布局预览
+### 独立效果预览
 
-点击 **Text Layout → Open Layout Preview**，在独立窗口输入内容，选择字体、Shader 和参数，并实时调整管理器排版设置。
+点击管理器 **Preview → Open Preview**，或 **Tools → BurstWord → Preview**。在独立窗口输入内容，选择字体、效果材质、动画，并实时调整材质参数和管理器排版设置。
+
+材质颜色、数值和纹理直接在预览中编辑，修改会更新所选材质资源并支持 Undo。**Play Once** 播放一次，**Pause** 暂停，**Reset** 回到开始；拖动 **Time** 检查任意时刻，**Duration (seconds)** 控制完整播放时长。材质效果与 GPU 动画同时生效，原有 TMP 材质效果保留。
 
 | 标记 | 含义 |
 | --- | --- |
@@ -164,7 +164,7 @@ damageText.EmitText(hitPosition, "Critical 1234", Color.yellow,
 
 支持 Auto Fit、滚轮缩放、中键或 Alt+左键平移及 Reset View。尺寸是文字排版单位，与字号一起接受 UI 缩放或世界单位转换；预览视图缩放不修改尺寸。
 
-窗口使用独立隐藏预览场景和真实 Instancing 绘制。预览暂停动画，不包含游戏中的 UI 缩放与世界透视；边界线是自定义顶点偏移前的 CPU 布局范围。仅支持 BRG 的自定义 Shader 会明确提示无法在该预览后端运行。关闭窗口释放资源，不保存预览物体，也不向 Player 加入预览代码。
+Auto Fit 为所选动画留出显示范围，Layout Guides 可隐藏辅助线。预览不包含游戏中的 UI 缩放和世界透视；辅助线显示动画和自定义顶点偏移前的布局。预览需要自定义 Shader 支持 Instancing。
 
 ## 空间、跟随与遮挡
 
@@ -186,8 +186,6 @@ ScreenSnapshot 固定的是世界锚点，镜头移动仍会改变它在屏幕�
 
 三种模式都按**整条飘字**从远到近排序；同一条中的字形共用排序位置，不按字符单独排序。内部等距离时按发射顺序，后发射的在前，字体或 Shader 不改变这个次序。完整场景透明排序遵循普通透明 Renderer 的队列和排序规则，不提供逐像素透明交叉求解。
 
-默认和不透明遮挡模式依赖 BurstWord Renderer Feature；完整场景模式走普通透明通道。完整场景排序需要按整条提交排序位置，通常显著增加绘制命令数。
-
 ### 跟随已有 Transform
 
 ```csharp
@@ -200,7 +198,7 @@ var handle = damageText.EmitText(target, "Critical 1234", Color.yellow,
     duration: 2f);
 ```
 
-传入偏移、旋转和缩放是目标的局部值。世界模式使用 `target.localToWorldMatrix * TRS(offset, rotation, scale)`。目标销毁后文字冻结在最后有效姿态，直到到期；空目标不发射。
+传入偏移、旋转和缩放是目标的局部值。世界模式继承目标的位置、旋转和缩放。目标销毁后文字冻结在最后有效姿态，直到到期；空目标不发射。
 
 ### 没有 Transform 时手动更新
 
@@ -233,17 +231,20 @@ damageText.TryRelease(handle); // 提前结束；自然到期无需手动释放�
 
 动画只允许固定的 11 条轨道：位置 X/Y、旋转 Z、缩放 X/Y、颜色 RGBA、透明度和亮度。窗口不提供任意层级、组件或属性入口，外部 Clip 会验证非法轨道并明确报错。位移单位与文字排版单位一致，颜色和透明度与发射及材质颜色相乘。
 
-Clip 的完整时长映射到每条飘字的完整 `duration`；例如 1 秒 Clip 可以在 2 秒飘字中完整播放。编辑器将曲线烘焙为 **256 点采样数据**，Player 读取共享 GPU 表，不逐条、逐帧求值 AnimationCurve，也不使用 Animator。
+Clip 的完整时长映射到每条飘字的 `duration`；例如 1 秒 Clip 可以在 2 秒飘字中完整播放。保存动画资源后即可加入 Animations 列表。
 
 列表或槽位为空时使用内置上浮和后半程淡出。**Animations → Built-in Motion → Rise Height** 调整上浮高度，默认 **90** 个排版单位，速度为高度 / 本条 `duration`；负值向下。代码可用 `useLegacyAnimation: true` 明确选择内置动画。
 
-`animationAmplitude` 只改变曲线位移幅度，不改变播放时长、缩放、颜色或透明度。不同动画共用采样表，选择动画本身不拆绘制批次。
+`animationAmplitude` 只改变曲线位移幅度，不改变播放时长、缩放、颜色或透明度。
 
 ## 自定义 Shader 效果
 
-在 **Shader Effects** 点击 **Create Custom Effect Shader**，保存到项目 Assets；生成的普通 Shader 自动加入列表。点击 **Edit**，修改两个函数：
+在 **Shader Effects** 点击 **Create Custom Effect Shader**，保存到项目 Assets；同时生成 `.shader` 和 `.mat`，材质自动加入列表。选择材质行调整参数，点击 **Edit Shader** 修改自己的 Shader。包内共享 HLSL 不需要使用者编辑。
+
+标准扩展允许在自己的 Shader 中增加 `Properties`、参数字段、纹理、辅助函数和自己的 include。数值字段通过 `BURSTWORD_MATERIAL_FIELDS` 声明，由框架放入固定的常量缓冲；不能改动底层保留字段或另建同名缓冲。生成模板已提供可编辑的 Effect Color：
 
 ```hlsl
+#define BURSTWORD_MATERIAL_FIELDS float4 _EffectColor;
 #include "Packages/com.shanflyer.burstword/Runtime/BRG/BurstWordShaderEffects.hlsl"
 
 void BurstWordModifyVertex(inout BurstWordEffectVertex vertex)
@@ -256,11 +257,24 @@ void BurstWordModifyVertex(inout BurstWordEffectVertex vertex)
 void BurstWordModifyFragment(inout half4 color, BurstWordEffectFragment fragment)
 {
     // 修改完成 TMP / Sprite 绘制后的颜色，保留原 Alpha。
-    color.rgb *= half3(1, 0.5, 0.2);
+    color *= _EffectColor;
 }
 ```
 
-上述函数写入生成模板对应位置，保留模板的 Properties、Tags、Pass 和编译指令。共享 HLSL 负责数据解码、字形、TMP 材质效果、空间、动画和深度；用户文件不随包升级被覆盖。空模板效果与内置 Shader 一致，同时支持 BRG 和 Instancing。
+上述声明和函数写入生成模板对应位置，允许增加自己的 Properties，但保留模板的内部属性、Tags、Pass 和编译指令。只编辑项目中的自定义 Shader，包升级不会覆盖该文件。模板同时支持 BRG 和 Instancing。
+
+所选字体的描边、阴影和发光与自定义材质效果同时生效。用户材质中的颜色、数值和纹理可在 Inspector 或代码中调整。
+
+```csharp
+damageText.EmitText(hitPosition, "Critical 1234", Color.white,
+    effectMaterial: dissolveMaterial);
+
+// 在代码中修改材质后，显式刷新其已缓存的绘制材质。
+dissolveMaterial.SetFloat("_Dissolve", 0.3f);
+damageText.RefreshEffectMaterial(dissolveMaterial);
+```
+
+Inspector 的材质参数在 Play 中修改时会自动刷新。直接修改材质 Shader 需要重启管理器；已有 Shader 列表仍兼容绘制，可用 **Convert Shader Entries to Materials** 转为可配置的材质。
 
 每条通过 `effectParameters` 传四个有限数值，默认全零，含义由 Shader 定义。同一 Shader 的不同参数不需要分材质。持有句柄时可直接更新：
 
@@ -268,13 +282,13 @@ void BurstWordModifyFragment(inout half4 color, BurstWordEffectFragment fragment
 damageText.TryUpdateEffectParameters(handle, new Vector4(1, 0, 0, 0));
 ```
 
-参数更新不重新排版；句柄过期或该条使用内置 Shader 时返回 false。不同 Shader 会拆绘制段，但保留整条透明排序。
+句柄过期或该条使用内置 Shader 时，参数更新返回 false。
 
 高级开发者可以完全自写 Shader，但必须符合标准的数据、Pass、BRG / Instancing 声明和绑定。Inspector 显示兼容性及错误原因，运行时拒绝不支持当前后端的效果。完整字段、实例数据和后端规范见 [自定义 Shader 开发规范](Documentation~/SHADER_EFFECTS.md)。
 
 自定义顶点位移不改变 CPU 排版边界、换行宽度和整条排序中心。需要参与排序的运动使用姿态或动画系统；像素效果不能超出字形四边形范围，额外几何与 padding 属于高级扩展。
 
-## 批量发射与性能
+## 批量发射
 
 高频发射复用 `TextEmission[]`，通过 `EmitBatch` 一次提交，避免业务侧每次分配数组。同一批可以混用文字、字体、动画、Shader 和跟随目标：
 
@@ -301,12 +315,6 @@ damageText.EmitBatch(requests, 2);
 `count` 指定使用的数组前缀，可选第三个参数 `TextHandle[]` 接收对应句柄，也应预先分配并复用。每条 `WrapWidth` 是独立值，`0` 关闭本条自动换行；批量不会自动继承管理器 Wrap Width。需要继承时显式传 `wrapWidth: damageText.wrapWidth`。
 
 构造函数提供默认寿命；若用结构体对象初始化器，需显式填写正数 `Duration`，并按需要设置 `Pose` / `AnimationAmplitude` 等字段。批量先校验全部寿命、资源编号和效果参数，再发射；容量不足仍可能使部分有效请求无法显示。
-
-CPU 负责解析、排版、缓存、跟随、排序和提交，GPU 负责动画及字形着色。缓存命中会复用布局；数字、换行等支持的批量路径通过 Burst/Jobs 准备，不支持的情况回到完整主线程排版。它不是完全异步的文字系统。
-
-BRG 按 Shader 和图集资源组织页面，一页最多绑定 16 张图集。排序后同页的连续段可以合并；不同 Shader、跨页和完整场景透明排序可能增加绘制命令。BRG 命令数不等于整个场景的 Draw Call 数，也不能保证所有文字永远一条底层 Draw Call。
-
-Instancing 复用相同排版和动画，每次最多提交 64 个字形实例以适应较低的 uniform 限制。它仍不创建文字对象，但通常比 BRG 消耗更多 CPU 提交时间。首次遇到新字体、图集、Shader 或布局需要建立缓存；不能将所有内容宣称为零分配或零 CPU 成本。
 
 ## 可选文字塑形
 
@@ -337,28 +345,29 @@ void ShapeText(in TextShapingRequest input, List<TextShapingGlyph> output)
 | --- | --- |
 | Setup | 相机、容量、渲染管线检查及安装 |
 | Fonts | 默认和额外 TMP 字体、字号、原生 Sprite 资源 |
-| Text Layout | 对齐、固定区域、换行、富文本、字偶调整及布局预览 |
+| Text Layout | 对齐、固定区域、换行、富文本和字偶调整 |
 | Space & Occlusion | 空间模式、世界单位比例、遮挡和排序 |
 | UI Scaling | 屏幕模式下的 Canvas 缩放或手动缩放设置 |
 | Animations | 带编号动画列表、编辑预览及内置上浮高度 |
-| Shader Effects | 带编号 Shader 列表、模板创建及兼容性反馈 |
+| Shader Effects | 带编号材质列表、材质参数、Shader 模板创建及兼容性反馈 |
+| Preview | 独立文字、材质、动画和排版预览入口 |
 | Runtime Status | Play 时的实际后端、活跃文字/字形、绘制及缺失资源计数 |
 
-子选项仅在适用或开启时显示。折叠分组只隐藏界面，不停用功能。Play 中从 Inspector 修改字体、相机或排版资源可能重建管理器并清掉当前飘字；多种效果同时显示应使用逐条参数。Shader 列表在 Play 前配置。
+子选项仅在适用或开启时显示。折叠分组只隐藏界面，不停用功能。Play 中从 Inspector 修改字体、相机或排版资源可能重建管理器并清掉当前飘字；多种效果同时显示应使用逐条参数。效果材质列表在 Play 前配置。
 
-## 版本与平台
+## 环境与后端设置
 
-最低版本为 **Unity 2022.3 + URP**，包含 Unity 6 的 Render Graph 路径；Unity 2022.3 使用经典 Render Pass 路径。已在 2022.3.62f3、6000.2.1f1、6000.4.7f1、6000.6.0f1 编译验证，最新自定义 Shader 功能在 2022.3.62f3 / 6000.6.0f1 的 Windows Player 验证。
+使用 **Unity 2022.3 或更新版本、URP，以及支持 GPU Instancing 的设备**。请完成首次接入中的 Renderer Feature 安装步骤。
 
-| 图形后端 / 条件 | 绘制路径 |
-| --- | --- |
-| D3D11 / D3D12 / Vulkan / Metal 且满足设备、Shader 和 BRG 初始化要求 | 优先 BRG |
-| BRG 不可用，或使用 OpenGL / OpenGL ES / WebGL 2 | 普通 GPU Instancing |
-| 设备不支持 GPU Instancing | 明确报告无法初始化；不转成逐条对象绘制 |
+`renderBackend` 默认 `Auto`，自动选择 BRG；BRG 不可用时回退到 GPU Instancing。如需固定使用 Instancing，在管理器初始化前设置：
 
-代码字段 `renderBackend` 默认 Auto，可在管理器初始化前指定 Instancing。指定 BRG 但设备不可用时也会回退；自定义 Shader 必须支持实际选用的后端。
+```csharp
+damageText.enabled = false;
+damageText.renderBackend = BrgDamageTextRenderer.RenderBackend.Instancing;
+damageText.enabled = true;
+```
 
-已实际运行的图形路径包括 Windows D3D11 的 BRG / Instancing 和 OpenGL Core 的 Instancing。其他 API 与 macOS、Linux、移动端、浏览器、主机平台需要在目标设备验证，不能把后端实现等同于全平台已实测认证。闭源主机平台仍需要 Unity 对应构建模块和 SDK；核心包没有额外的原生塑形库打包要求。
+自定义效果材质的 Shader 必须支持实际使用的后端，兼容性信息显示在 Shader Effects 分区。
 
 ## 开发规范与许可
 
