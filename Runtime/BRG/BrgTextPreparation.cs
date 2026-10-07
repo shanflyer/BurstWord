@@ -28,7 +28,7 @@ namespace BurstWord.BRG
         private struct DigitChoice { public ResolvedGlyph glyph; public bool alternative; }
         private void PrepareDigitChoices(ParsedMessage entry)
         {
-            var source = spriteAsset != null ? spriteAsset : TMP_Settings.defaultSpriteAsset;
+            var source = ActiveSpriteAsset;
             entry.digitSprite = source;
             if (source != null)
                 for (uint digit = '0'; digit <= '9'; digit++)
@@ -64,16 +64,17 @@ namespace BurstWord.BRG
                 hash = unchecked((hash ^ (uint)(!tag && c >= '0' && c <= '9' ? '0' : c)) * 1099511628211UL);
                 if (c == '>') tag = false;
             }
-            hash = unchecked((hash ^ (ulong)BrgObjectIdentity.Of(font)) * 1099511628211UL);
-            hash = unchecked((hash ^ (uint)fontSize.GetHashCode()) * 1099511628211UL);
+            hash = unchecked((hash ^ (ulong)BrgObjectIdentity.Of(LayoutFont)) * 1099511628211UL);
+            hash = unchecked((hash ^ (ulong)(LayoutMaterial != null ? BrgObjectIdentity.Of(LayoutMaterial) : 0)) * 1099511628211UL);
+            hash = unchecked((hash ^ (uint)LayoutFontSize.GetHashCode()) * 1099511628211UL);
             return unchecked((hash ^ (uint)color.GetHashCode()) * 1099511628211UL);
         }
         private bool FindParsedMessage(string text, Color color, out ParsedMessage entry)
         {
             entry = null;
             return text.Length <= 512 && parsedMessages.TryGetValue(ParsedHash(text, color), out entry) &&
-                ReferenceEquals(entry.font, font) && ReferenceEquals(entry.material, fontMaterial) &&
-                entry.size == fontSize && entry.color.Equals(color) && entry.rich == richText && MatchesPrepared(entry.sample, text);
+                ReferenceEquals(entry.font, LayoutFont) && ReferenceEquals(entry.material, LayoutMaterial) &&
+                entry.size == LayoutFontSize && entry.color.Equals(color) && entry.rich == richText && MatchesPrepared(entry.sample, text);
         }
 
         // Cache formatting and static characters, not damage values or final layouts.
@@ -82,14 +83,14 @@ namespace BurstWord.BRG
         {
             activePreparedMessage = null;
             if (text.Length > 512) return Parse(text, color);
-            if (spriteSequences != null)
+            if (useSprites && spriteSequences != null)
                 foreach (var sequence in spriteSequences)
                     if (sequence.text != null)
                         foreach (char c in sequence.text)
                             if (c >= '0' && c <= '9') return Parse(text, color);
             ulong hash = ParsedHash(text, color);
-            if (parsedMessages.TryGetValue(hash, out var entry) && ReferenceEquals(entry.font, font) &&
-                ReferenceEquals(entry.material, fontMaterial) && entry.size == fontSize && entry.color.Equals(color) &&
+            if (parsedMessages.TryGetValue(hash, out var entry) && ReferenceEquals(entry.font, LayoutFont) &&
+                ReferenceEquals(entry.material, LayoutMaterial) && entry.size == LayoutFontSize && entry.color.Equals(color) &&
                 entry.rich == richText && MatchesPrepared(entry.sample, text))
             {
                 if (!useMeasuredLayout)
@@ -113,7 +114,7 @@ namespace BurstWord.BRG
                 // Bulk-copy the fixed token data. Only numeric slots need resolution;
                 // copying a large Token struct character by character was a hot path.
                 tokens.AddRange(entry.tokens);
-                bool preparedDigits = entry.digitChoices != null && ReferenceEquals(entry.digitSprite, spriteAsset != null ? spriteAsset : TMP_Settings.defaultSpriteAsset);
+                bool preparedDigits = entry.digitChoices != null && ReferenceEquals(entry.digitSprite, ActiveSpriteAsset);
                 for (int slot = 0; slot < entry.digitTokens.Length; slot++)
                 {
                     int index = entry.digitTokens[slot];
@@ -148,8 +149,8 @@ namespace BurstWord.BRG
             if (parsedMessages.Count >= 512 || parsedTokenCount + tokens.Count > 32768)
             { InvalidatePreparationTemplates(); parsedMessages.Clear(); parsedTokenCount = 0; wrappedLines.Clear(); wrappedLineGlyphCount = 0; measuredPlans.Clear(); measuredPlanGlyphCount = 0; measuredRunCache.Clear(); measuredRunGlyphCount = 0; }
             if (parsedMessages.TryGetValue(hash, out entry)) parsedTokenCount -= entry.tokens.Length;
-            entry = new ParsedMessage { sample = text, tokens = tokens.ToArray(), font = font,
-                material = fontMaterial, color = color, size = fontSize, rich = richText, digitPrefix = new int[tokens.Count + 1], points = new uint[tokens.Count] };
+            entry = new ParsedMessage { sample = text, tokens = tokens.ToArray(), font = LayoutFont,
+                material = LayoutMaterial, color = color, size = LayoutFontSize, rich = richText, digitPrefix = new int[tokens.Count + 1], points = new uint[tokens.Count] };
             for (int i = 0; i < tokens.Count; i++) entry.points[i] = tokens[i].unicode;
             for (int i = 0; i < tokens.Count; i++) entry.digitPrefix[i + 1] = entry.digitPrefix[i] +
                 (tokens[i].unicode >= '0' && tokens[i].unicode <= '9' ? 1 : 0);
@@ -183,7 +184,7 @@ namespace BurstWord.BRG
             foreach (var token in tokens)
                 if (!ReferenceEquals(token.sprite, null) || !(token.unicode >= '0' && token.unicode <= '9' || token.unicode == '-' || token.unicode == '+')) return false;
             shaped.Clear();
-            float width = 0, ascent = fontSize * 0.8f, descent = -fontSize * 0.2f;
+            float width = 0, ascent = LayoutFontSize * 0.8f, descent = -LayoutFontSize * 0.2f;
             for (int i = 0; i < tokens.Count; i++)
             {
                 var token = tokens[i];
@@ -205,7 +206,7 @@ namespace BurstWord.BRG
                 ascent = Mathf.Max(ascent, face.ascentLine * faceScale + token.style.baseline);
                 descent = Mathf.Min(descent, face.descentLine * faceScale + token.style.baseline);
             }
-            float height = ascent - descent + fontSize * 0.2f;
+            float height = ascent - descent + LayoutFontSize * 0.2f;
             float baseline = -ascent + height * 0.5f, cursor = -width * 0.5f;
             foreach (var item in shaped)
             {

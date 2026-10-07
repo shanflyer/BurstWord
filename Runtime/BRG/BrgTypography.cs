@@ -39,10 +39,13 @@ namespace BurstWord.BRG
         }
         [Tooltip("Width in reference-resolution pixels; zero disables automatic wrapping.")]
         [Min(0)] public float wrapWidth;
+        public bool useAdditionalFonts = true;
         public TMP_FontAsset[] additionalFonts;
+        public bool useSprites = true;
         public TMP_SpriteAsset spriteAsset;
         public TMP_SpriteAsset[] additionalSpriteAssets;
         public Material[] materialPresets;
+        public bool useMaterialPresets = true;
         public BrgFontSources fontSources;
         private BrgFontSources[] discoveredFontSources;
         [Tooltip("Optional TMP material preset for the default font (outline, underlay, glow, face color).")]
@@ -194,13 +197,13 @@ namespace BurstWord.BRG
             LastLayoutUsedShaping = false;
             LastGlyphSubstitutionCount = 0;
             // Damage numbers avoid tag parsing, Unicode analysis and the native shaping call.
-            bool numeric = wrapWidth <= 0 && fontMaterial == null;
+            bool numeric = wrapWidth <= 0 && CanUseNumericLayout;
             for (int i = 0; numeric && i < text.Length; i++) numeric = text[i] >= '0' && text[i] <= '9' || text[i] == '-' || text[i] == '+';
             if (numeric)
             {
                 bool result = BuildBasicLayout(text, color);
                 LastLayoutLineCount = 1;
-                LastLayoutSize = new Vector2(lineWidths.Count > 0 ? lineWidths[0] : 0, fontSize);
+                LastLayoutSize = new Vector2(lineWidths.Count > 0 ? lineWidths[0] : 0, LayoutFontSize);
                 return result;
             }
             layout.Clear();
@@ -220,7 +223,7 @@ namespace BurstWord.BRG
                 int paragraphEnd = paragraphStart;
                 while (paragraphEnd < tokens.Count && tokens[paragraphEnd].unicode != '\n') paragraphEnd++;
                 int length = paragraphEnd - paragraphStart;
-                if (length == 0) { y -= fontSize * 1.2f; lines++; paragraphStart = paragraphEnd + 1; continue; }
+                if (length == 0) { y -= LayoutFontSize * 1.2f; lines++; paragraphStart = paragraphEnd + 1; continue; }
                 using (LayoutTiming(1)) AnalyzeParagraphCached(paragraphStart, paragraphEnd);
                 bool measureParagraph = wrapWidth > 0 || reusedBatchMeasurement != null || (enablePreparationJobs && useMeasuredLayout &&
                     paragraphStart == 0 && paragraphEnd == tokens.Count && activePreparedMessage != null &&
@@ -281,7 +284,7 @@ namespace BurstWord.BRG
                     using (LayoutTiming(4)) if (!(measureParagraph && TryMeasuredLine(lineStart, visibleEnd)) && !ShapeRuns(lineStart, visibleEnd, false)) return false;
                     bool lineShaping = LastLayoutUsedShaping;
                     LastLayoutUsedShaping |= previousShaping;
-                    float lineWidth = 0, ascent = fontSize * 0.8f, descent = -fontSize * 0.2f;
+                    float lineWidth = 0, ascent = LayoutFontSize * 0.8f, descent = -LayoutFontSize * 0.2f;
                     foreach (var run in runs) lineWidth += run.width;
                     foreach (var run in runs)
                     {
@@ -305,7 +308,7 @@ namespace BurstWord.BRG
                             x += item.advance;
                         }
                     }
-                    y += descent - fontSize * 0.2f;
+                    y += descent - LayoutFontSize * 0.2f;
                     if (cacheLine) StoreWrappedLine(lineKey, layoutStart, lineY, y - lineY, lineWidth,
                         LastGlyphSubstitutionCount - substitutions, lineShaping);
                     maxWidth = Mathf.Max(maxWidth, lineWidth); lines++;
@@ -314,7 +317,7 @@ namespace BurstWord.BRG
                 }
                 paragraphStart = paragraphEnd + 1;
             }
-            if (tokens[tokens.Count - 1].unicode == '\n') { y -= fontSize * 1.2f; lines++; }
+            if (tokens[tokens.Count - 1].unicode == '\n') { y -= LayoutFontSize * 1.2f; lines++; }
             float center = -y * 0.5f;
             for (int i = 0; i < layout.Count; i++) { var item = layout[i]; item.rect.y += center; layout[i] = item; }
             LastLayoutLineCount = lines; LastLayoutSize = new Vector2(maxWidth, -y);
@@ -333,7 +336,7 @@ namespace BurstWord.BRG
 
         private bool Parse(string text, Color color)
         {
-            var style = new TextStyle { font = font, material = fontMaterial, size = fontSize, color = color };
+            var style = new TextStyle { font = LayoutFont, material = LayoutMaterial, size = LayoutFontSize, color = color };
             bool noParse = false;
             for (int i = 0; i < text.Length; i++)
             {
@@ -428,14 +431,16 @@ namespace BurstWord.BRG
 
         private TMP_FontAsset FindFont(string name)
         {
+            if (LayoutFont != null && name == LayoutFont.name) return LayoutFont;
             if (name == font.name) return font;
-            if (additionalFonts != null) foreach (var asset in additionalFonts) if (asset != null && asset.name == name) return asset;
+            if (useAdditionalFonts && additionalFonts != null) foreach (var asset in additionalFonts) if (asset != null && asset.name == name) return asset;
             return null;
         }
         private Material FindMaterial(string name)
         {
-            if (fontMaterial != null && fontMaterial.name == name) return fontMaterial;
-            if (materialPresets != null) foreach (var asset in materialPresets) if (asset != null && asset.name == name) return asset;
+            if (LayoutMaterial != null && LayoutMaterial.name == name) return LayoutMaterial;
+            if (useMaterialPresets && fontMaterial != null && fontMaterial.name == name) return fontMaterial;
+            if (useMaterialPresets && materialPresets != null) foreach (var asset in materialPresets) if (asset != null && asset.name == name) return asset;
             return null;
         }
         private TMP_SpriteAsset FindSpriteAsset(string name)
@@ -446,6 +451,7 @@ namespace BurstWord.BRG
         }
         private bool ParseSprite(string tag, TextStyle style)
         {
+            if (!useSprites) return false;
             var asset = spriteAsset != null ? spriteAsset : TMP_Settings.defaultSpriteAsset;
             string main = Value(tag, "sprite");
             if (main != null && !int.TryParse(main, out _)) asset = FindSpriteAsset(main);
@@ -467,6 +473,7 @@ namespace BurstWord.BRG
         }
         private bool TrySpriteUnicode(uint unicode, TextStyle style)
         {
+            if (!useSprites) return false;
             var asset = spriteAsset != null ? spriteAsset : TMP_Settings.defaultSpriteAsset;
             if (asset == null) return false;
             var key = (BrgObjectIdentity.Of(asset), unicode);
@@ -483,7 +490,7 @@ namespace BurstWord.BRG
         private bool TrySequence(string text, ref int position, TextStyle style)
         {
             int found = -1, length = 0;
-            if (spriteSequences == null) return false;
+            if (!useSprites || spriteSequences == null) return false;
             for (int i = 0; i < spriteSequences.Length; i++)
             {
                 string value = spriteSequences[i].text;
@@ -503,7 +510,7 @@ namespace BurstWord.BRG
             if (styledGlyphs.TryGetValue(key, out resolved)) { alternative = resolved.alternative; return true; }
             FontStyles styles = (style.bold ? FontStyles.Bold : FontStyles.Normal) | (style.italic ? FontStyles.Italic : FontStyles.Normal);
             var character = LookupStyledCharacter(unicode, style.font, styles, style.bold ? FontWeight.Bold : FontWeight.Regular, out alternative);
-            if (character == null && additionalFonts != null)
+            if (character == null && useAdditionalFonts && additionalFonts != null)
                 foreach (var candidate in additionalFonts)
                 {
                     if (candidate == null) continue;

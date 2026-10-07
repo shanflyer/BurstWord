@@ -5,6 +5,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using UnityEngine;
 using UnityEngine.Rendering;
+using TMPro;
 
 namespace BurstWord.BRG
 {
@@ -181,17 +182,31 @@ namespace BurstWord.BRG
             SortedLabelCount = UploadedTransformBytesLastFrame = 0;
         }
 
+        public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset,
+            Quaternion? rotation, Vector3? scale, float horizontalDrift, float durationScale,
+            BrgTextAnimation animation, float animationAmplitude)
+            => EmitText(target, text, color, offset, rotation, scale, horizontalDrift, durationScale,
+                animation, animationAmplitude, font: null);
+
         public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset = default,
             Quaternion? rotation = null, Vector3? scale = null, float horizontalDrift = 0, float durationScale = 1,
-            BrgTextAnimation animation = null, float animationAmplitude = 1)
+            BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
         {
             if (target == null) return default;
             var local = new TextPose(Vector3.zero, rotation ?? Quaternion.identity, scale ?? Vector3.one, offset);
-            return EmitSpatial(text, color, target, local, horizontalDrift, durationScale, animation, animationAmplitude);
+            return EmitSpatial(text, color, target, local, horizontalDrift, durationScale,
+                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, material, fontSize);
         }
+        public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift, float durationScale,
+            BrgTextAnimation animation, float animationAmplitude)
+            => EmitText(pose, text, color, horizontalDrift, durationScale, animation, animationAmplitude, font: null);
+
         public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
-            BrgTextAnimation animation = null, float animationAmplitude = 1)
-            => EmitSpatial(text, color, null, pose, horizontalDrift, durationScale, animation, animationAmplitude);
+            BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
+            => EmitSpatial(text, color, null, pose, horizontalDrift, durationScale,
+                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, material, fontSize);
 
         public bool IsAlive(TextHandle handle) => ReferenceEquals(handle.owner, this) && labels != null &&
             handle.index >= 0 && handle.index < labels.Length && labels[handle.index].active &&
@@ -211,8 +226,10 @@ namespace BurstWord.BRG
         { if (!IsAlive(handle)) return false; ReturnLabel(handle.index); return true; }
 
         private TextHandle EmitSpatial(string text, Color color, Transform target, TextPose pose, float drift, float durationScale,
-            BrgTextAnimation animation = null, float amplitude = 1, bool resolvedAnimation = false)
+            BrgTextAnimation animation = null, float amplitude = 1, bool resolvedAnimation = false,
+            TMP_FontAsset selectedFont = null, Material selectedMaterial = null, int selectedSize = 0)
         {
+            using var appearance = new EmissionAppearanceScope(this, selectedFont, selectedMaterial, selectedSize);
             using (preparingBatch ? default(Unity.Profiling.ProfilerMarker.AutoScope) : GenerateMarker.Auto())
             {
                 if (!isActiveAndEnabled || !IsInitialized || string.IsNullOrEmpty(text)) return default;
@@ -221,7 +238,7 @@ namespace BurstWord.BRG
                 using (LayoutMarker.Auto()) built = BuildLayout(text, color);
                 if (!built) { FailedLayoutCount++; return default; }
                 return CommitSpatial(target, pose, drift, durationScale, default, 0, layout.Count,
-                    resolvedAnimation ? animation : animation ?? defaultAnimation, amplitude);
+                    resolvedAnimation ? animation : animation ?? ActiveDefaultAnimation, amplitude);
             }
         }
         private unsafe TextHandle CommitSpatial(Transform target, TextPose pose, float drift, float durationScale,

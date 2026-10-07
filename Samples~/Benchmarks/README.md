@@ -18,8 +18,10 @@
 常用编辑器入口：
 
 - **Tools → BurstWord → Animation Editor**：独立 AnimationClip 编辑、固定属性关键帧和即时 GPU 预览，也可双击动画预设打开。
-- **Tools → BurstWord → Prepare Font Sources**：新增 TMP 字体后准备复杂文字塑形所需的字体源。
+- **Tools → BurstWord → HarfBuzz → Prepare Font Sources**：仅安装可选 HarfBuzz 包后提供；该适配器也会在 Play/构建前自动准备。
 - **Tools → BurstWord → Install BRG Rendering**：配置 URP 渲染功能。
+
+直接接入项目不需要 Samples，见包内 `Documentation~/QUICKSTART.md`。需确认游戏相机的 Renderer Features 中 **BurstWord ordered text** 存在且启用。
 
 多语言、换行、字体材质、Job 优化、三种排序/空间模式与 GPU 动画均保留。临时验证脚本、旧场景、逐帧记录器、详细诊断导出和重复菜单已移除；正常运行不会自动写测试日志或性能报告。必要的错误和缺资源提示仍会保留。
 

@@ -65,7 +65,7 @@ namespace BurstWord.BRG
         private bool PrepareNumericJob(string text, out int count)
         {
             count = 0;
-            if (!useNumericGeometryCache || fontMaterial != null || wrapWidth > 0 || !IsBasicNumber(text)) return false;
+            if (!useNumericGeometryCache || !CanUseNumericLayout || wrapWidth > 0 || !IsBasicNumber(text)) return false;
             PrepareNumericGeometry();
             for (int i = 0; i < text.Length; i++)
             {

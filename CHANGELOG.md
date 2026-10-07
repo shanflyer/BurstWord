@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Add a direct-integration tutorial that requires no Samples and explicitly checks the active camera's BurstWord ordered text Renderer Feature.
+- Replace the flat manager Inspector with grouped optional settings, real feature switches, conditional controls and camera-specific pipeline detection/installation.
+- Allow font, TMP material preset, font size and GPU animation selection per numeric/text emission, Transform/pose emission and batch request, without changing manager defaults or existing text.
+- Include font/material/size in preparation cache identity and preserve shared numeric Job tables when mixing font overrides; verify mixed wrapping batches and rendered output on BRG and instancing in Unity 2022.3 and 6000.6 Windows Players.
+
 ## 0.3.0
 
 - Remove mandatory HarfBuzz/native integration from the core. Use standard TMP glyph data by default and expose explicit optional shaping factories/assets.

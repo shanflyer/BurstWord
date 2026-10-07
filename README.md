@@ -14,7 +14,7 @@ Use a URP project. Unity resolves the URP, Burst and uGUI dependencies for your 
 
 ## Use
 
-Add `BrgDamageTextRenderer` to one manager object and assign a camera and TMP font asset. Emit from your combat code:
+No sample import is required. Run **Tools → BurstWord → Install BRG Rendering**, then check the Renderer Data actually used by your camera has an enabled **BurstWord ordered text** Renderer Feature. Check Graphics/Quality URP overrides and the camera's Renderer selection when using multiple renderers. Add `BrgDamageTextRenderer` to one manager object and assign a camera and TMP font asset. Its Inspector also checks this feature and provides installation and Renderer Data selection buttons. Emit from your combat code:
 
 ```csharp
 using BurstWord.BRG;
@@ -23,9 +23,14 @@ using UnityEngine;
 // renderer is a reference to your BrgDamageTextRenderer manager.
 renderer.Emit(hitPosition, 1234, Color.white);
 renderer.EmitText(hitPosition, "<b>Critical 1234</b>", Color.yellow);
+// Direct per-message choices; these resources do not need Additional Fonts / tag registration.
+renderer.Emit(hitPosition, 1234, Color.yellow,
+    font: criticalFont, material: outlineMaterial, animation: criticalAnimation, fontSize: 40);
 ```
 
 The manager provides whole-message sorting, three occlusion modes, fixed-size camera-facing text, transform following, world-space perspective and sampled GPU animation. The default typography uses TMP font/glyph resources, font fallbacks, pair adjustments, material effects, sprites, supported rich-text tags, Unicode bidirectional ordering and wrapping. It creates no TMP text component. Assign fonts containing your required glyphs. OpenType complex-script shaping is optional: the core package contains no external native font library and does not select a third-party provider for you.
+
+Start with the [direct-integration tutorial](Documentation~/QUICKSTART.md). The Inspector groups optional settings and hides child settings when their feature is disabled; collapsing a group only hides its UI. Existing serialized resources are retained when disabling a feature. `font`, `material`, `fontSize` and `animation` overrides are also available on both `EmitText` spatial overloads and each `TextEmission` in `EmitBatch`; the manager defaults and existing labels stay unchanged.
 
 `Render Backend` defaults to **Auto**: it uses BRG on compatible D3D11/D3D12, Vulkan and Metal devices, and falls back to ordinary instanced draws when that BRG path is unavailable. WebGL 2 and OpenGL/OpenGL ES use the fallback. Choose **Instancing** to test it directly. Both backends keep the same typography, whole-message ordering, space modes and GPU animation; the fallback never creates text objects. The benchmark panel shows the active backend and lets you switch it.
 

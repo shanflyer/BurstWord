@@ -43,6 +43,33 @@ namespace BurstWord.Baseline.Editor
             SaveChanges(count);
         }
 
+        /// <summary>Checks the renderer selected by this camera, including quality overrides.</summary>
+        public static bool CheckCamera(Camera camera, out ScriptableRendererData rendererData, out string message)
+        {
+            rendererData = null;
+            var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            if (pipeline == null)
+            { message = "BurstWord requires an active URP pipeline. Assign your URP asset in Graphics / Quality settings."; return false; }
+            var serialized = new SerializedObject(pipeline);
+            var renderers = serialized.FindProperty("m_RendererDataList");
+            var defaultIndex = serialized.FindProperty("m_DefaultRendererIndex");
+            int index = defaultIndex != null ? defaultIndex.intValue : 0;
+            var additional = camera != null ? camera.GetComponent<UniversalAdditionalCameraData>() : null;
+            if (additional != null)
+            {
+                var cameraIndex = new SerializedObject(additional).FindProperty("m_RendererIndex");
+                if (cameraIndex != null && cameraIndex.intValue >= 0) index = cameraIndex.intValue;
+            }
+            if (renderers == null || index < 0 || index >= renderers.arraySize ||
+                (rendererData = renderers.GetArrayElementAtIndex(index).objectReferenceValue as ScriptableRendererData) == null)
+            { message = "The selected camera has no valid URP Renderer Data. Check the URP asset's Renderer List and the camera's Renderer selection."; return false; }
+            foreach (var feature in rendererData.rendererFeatures)
+                if (feature is BrgTextRendererFeature && feature.isActive)
+                { message = "BurstWord ordered text is enabled on " + rendererData.name + "."; return true; }
+            message = "Enable BurstWord ordered text in " + rendererData.name + " → Renderer Features, or click Install BRG Rendering.";
+            return false;
+        }
+
         private static bool KeepBrgShaderVariants()
         {
             var settings=AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset");

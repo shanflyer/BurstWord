@@ -6,9 +6,11 @@ namespace BurstWord.BRG
     public sealed partial class BrgDamageTextRenderer
     {
         [Header("GPU animation")]
+        public bool useDefaultAnimation = true;
         [Tooltip("Null keeps the original low-cost linear animation. Curves are shared GPU samples; no per-label CPU curve evaluation.")]
         public BrgTextAnimation defaultAnimation;
         public BrgTextAnimation[] animationPresets = new BrgTextAnimation[0];
+        private BrgTextAnimation ActiveDefaultAnimation => useDefaultAnimation ? defaultAnimation : null;
         private sealed class AnimationEntry
         {
             public BrgTextAnimation asset;

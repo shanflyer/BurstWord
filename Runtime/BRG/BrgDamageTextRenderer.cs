@@ -168,17 +168,30 @@ namespace BurstWord.BRG
             UpdateBounds();
         }
 
-        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1)
+        // Preserve the original public signature for precompiled callers and method groups.
+        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift, float durationScale)
+            => Emit(worldPosition, damage, color, horizontalDrift, durationScale, font: null);
+
+        public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1,
+            BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
         {
             if (!isActiveAndEnabled || !IsInitialized) return false;
             if (freeLabelCount == 0) { DroppedCount++; return false; }
             // Keep the same integer-to-string work as the baseline for this first comparison.
-            return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift, durationScale);
+            return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift,
+                durationScale, animation, animationAmplitude, font, material, fontSize, useLegacyAnimation);
         }
 
-        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float durationScale = 1)
+        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float durationScale)
+            => EmitText(worldPosition, text, color, horizontalDrift, durationScale, font: null);
+
+        public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
+            BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
+            Material material = null, int fontSize = 0, bool useLegacyAnimation = false)
             => EmitSpatial(text, color, null, new TextPose(worldPosition, Quaternion.identity, Vector3.one),
-                horizontalDrift, durationScale).IsAlive;
+                horizontalDrift, durationScale, useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation,
+                animationAmplitude, true, font, material, fontSize).IsAlive;
 
         private bool BuildBasicLayout(string text, Color color)
         {
@@ -274,6 +287,14 @@ namespace BurstWord.BRG
             if (glyphCache.TryGetValue(unicode, out resolved)) return true;
             var character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, font, true, FontStyles.Normal,
                 FontWeight.Regular, out _);
+            if (character == null && useAdditionalFonts && additionalFonts != null)
+                foreach (var candidate in additionalFonts)
+                {
+                    if (candidate == null) continue;
+                    character = TMP_FontAssetUtilities.GetCharacterFromFontAsset(unicode, candidate, true,
+                        FontStyles.Normal, FontWeight.Regular, out _);
+                    if (character != null) break;
+                }
             if (character == null && TMP_Settings.fallbackFontAssets != null)
                 character = TMP_FontAssetUtilities.GetCharacterFromFontAssets(unicode, font, TMP_Settings.fallbackFontAssets,
                     true, FontStyles.Normal, FontWeight.Regular, out _);
