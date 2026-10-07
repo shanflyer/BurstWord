@@ -81,11 +81,6 @@ namespace BurstWord.BRG
         {
             activePreparedMessage = null;
             if (text.Length > 512) return Parse(text, color);
-            if (useSprites && spriteSequences != null)
-                foreach (var sequence in spriteSequences)
-                    if (sequence.text != null)
-                        foreach (char c in sequence.text)
-                            if (c >= '0' && c <= '9') return Parse(text, color);
             ulong hash = ParsedHash(text, color);
             if (parsedMessages.TryGetValue(hash, out var entry) && ReferenceEquals(entry.font, LayoutFont) &&
                 entry.size == LayoutFontSize && entry.color.Equals(color) &&
@@ -179,6 +174,7 @@ namespace BurstWord.BRG
 
         private bool BuildStyledNumbers()
         {
+            if (ShapingEnabled) return false;
             foreach (var token in tokens)
                 if (!ReferenceEquals(token.sprite, null) || !(token.unicode >= '0' && token.unicode <= '9' || token.unicode == '-' || token.unicode == '+')) return false;
             shaped.Clear();
@@ -231,7 +227,7 @@ namespace BurstWord.BRG
         private bool WrappedLineKey(int start, int end, out (ParsedMessage, ParagraphAnalysis, int, int, int, float) key)
         {
             key = default;
-            if (end <= start || end - start > 128 || activePreparedMessage == null || activeParagraphAnalysis == null) return false;
+            if (UsesShapingCallback || end <= start || end - start > 128 || activePreparedMessage == null || activeParagraphAnalysis == null) return false;
             // Reference identities come from collision-checked parsing/Unicode caches. A
             // digit-free range therefore has exactly the same tokens, styles and context.
             // No per-glyph hash, object access or style comparison is needed on a hit.
@@ -323,6 +319,7 @@ namespace BurstWord.BRG
         private sealed class NativeShape
         {
             public uint[] text;
+            public int contextStart, runStart, runLength;
             public NativeShapeGlyph[] glyphs;
             public IntPtr font;
             public uint script;
@@ -335,24 +332,36 @@ namespace BurstWord.BRG
         {
             // Word boundaries isolate Unicode joining context. Runs touching other characters
             // always use the full contextual shaping path (e.g. Arabic across style boundaries).
-            bool cacheable = (first == start || codePoints[first - 1] == ' ') &&
+            bool callback = UsesShapingCallback;
+            int textStart = callback ? start : first, textEnd = callback ? end : last;
+            bool cacheable = callback ? end - start <= 512 :
+                (first == start || codePoints[first - 1] == ' ') &&
                 (last == end || codePoints[last] == ' ') && last - first <= 512;
             // Changing damage values must not churn the word cache.
-            for (int i = first; cacheable && i < last; i++)
+            for (int i = first; !callback && cacheable && i < last; i++)
                 if (codePoints[i] >= '0' && codePoints[i] <= '9') cacheable = false;
             bool rtl = (levels[first] & 1) != 0;
             uint script = scripts[first];
             ulong hash = unchecked((ulong)face.NativeFont.ToInt64());
             hash = unchecked((hash ^ script) * 1099511628211UL);
             hash = unchecked((hash ^ (uint)((rtl ? 1 : 0) | (enableKerning ? 2 : 0) | (enableLigatures ? 4 : 0))) * 1099511628211UL);
+            // An application callback can depend on any character in the supplied context,
+            // including damage digits outside this run. Match the entire request, not just a word.
+            if (callback)
+            {
+                hash = unchecked((hash ^ (uint)start) * 1099511628211UL);
+                hash = unchecked((hash ^ (uint)first) * 1099511628211UL);
+                hash = unchecked((hash ^ (uint)(last - first)) * 1099511628211UL);
+            }
             if (cacheable)
             {
-                for (int i = first; i < last; i++) hash = unchecked((hash ^ codePoints[i]) * 1099511628211UL);
+                for (int i = textStart; i < textEnd; i++) hash = unchecked((hash ^ codePoints[i]) * 1099511628211UL);
                 if (nativeShapes.TryGetValue(hash, out var cached) && cached.font == face.NativeFont && cached.script == script &&
-                    cached.rtl == rtl && cached.kerning == enableKerning && cached.ligatures == enableLigatures && cached.text.Length == last - first)
+                    cached.rtl == rtl && cached.kerning == enableKerning && cached.ligatures == enableLigatures && cached.text.Length == textEnd - textStart &&
+                    (!callback || cached.contextStart == start && cached.runStart == first && cached.runLength == last - first))
                 {
                     bool equal = true;
-                    for (int i = 0; i < cached.text.Length; i++) if (cached.text[i] != codePoints[first + i]) { equal = false; break; }
+                    for (int i = 0; i < cached.text.Length; i++) if (cached.text[i] != codePoints[textStart + i]) { equal = false; break; }
                     if (equal) { NativeCacheHits++; count = cached.glyphs.Length; return cached.glyphs; }
                 }
             }
@@ -361,8 +370,9 @@ namespace BurstWord.BRG
             if (nativeShapes.Count >= 1024 || nativeShapeGlyphCount + count > 32768) { nativeShapes.Clear(); nativeShapeGlyphCount = 0; }
             if (nativeShapes.TryGetValue(hash, out var replaced)) nativeShapeGlyphCount -= replaced.glyphs.Length;
             var result = new NativeShapeGlyph[count]; Array.Copy(nativeScratch, result, count);
-            var text = new uint[last - first]; Array.Copy(codePoints, first, text, 0, text.Length);
+            var text = new uint[textEnd - textStart]; Array.Copy(codePoints, textStart, text, 0, text.Length);
             nativeShapes[hash] = new NativeShape { text = text, glyphs = result, font = face.NativeFont, script = script,
+                contextStart = start, runStart = first, runLength = last - first,
                 rtl = rtl, kerning = enableKerning, ligatures = enableLigatures };
             nativeShapeGlyphCount += count;
             return result;
@@ -373,7 +383,7 @@ namespace BurstWord.BRG
             NativeShapeCalls++;
             using (LayoutTiming(6)) {
             shapingOutput.Clear();
-            var request = new TextShapingRequest(codePoints, start, end - start, first, last - first,
+            var request = new TextShapingRequest(face.Font, codePoints, start, end - start, first, last - first,
                 scripts[first], (levels[first] & 1) != 0, enableKerning, enableLigatures);
             face.Session.Shape(in request, shapingOutput);
             count = shapingOutput.Count;

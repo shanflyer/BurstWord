@@ -9,30 +9,45 @@ namespace BurstWord.Baseline.Editor
     [CustomEditor(typeof(BrgDamageTextRenderer))]
     public sealed class BrgRendererInspector : UnityEditor.Editor
     {
-        private bool fonts, sprites, typography, animation, advanced;
-        private ReorderableList fontList;
+        private const string SectionKey = "BurstWord.RendererInspector.";
+        private ReorderableList fontList, animationList;
         private float lastWrapWidth = 400;
         private bool resourceChanges;
 
         private void OnEnable()
         {
             var renderer = (BrgDamageTextRenderer)target;
-            fonts = renderer.fonts != null && renderer.fonts.Length > 0;
+            if (renderer.wrapWidth > 0) lastWrapWidth = renderer.wrapWidth;
             fontList = new ReorderableList(serializedObject, serializedObject.FindProperty("fonts"), true, true, true, true);
-            fontList.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Fonts (indices 1..N)");
+            fontList.drawHeaderCallback = rect => EditorGUI.LabelField(rect, new GUIContent("Additional Text Fonts [1..N]", "Select with fontIndex. Missing glyphs follow the selected TMP font's fallback chain."));
             fontList.drawElementCallback = (rect, index, active, focused) =>
             {
                 rect.y += 2; rect.height = EditorGUIUtility.singleLineHeight;
-                EditorGUI.PropertyField(rect, fontList.serializedProperty.GetArrayElementAtIndex(index), new GUIContent("[" + (index + 1) + "]"));
+                DrawIndexedAsset(rect, fontList.serializedProperty.GetArrayElementAtIndex(index), index + 1);
             };
             fontList.onAddCallback = list =>
             {
                 int index = list.serializedProperty.arraySize++;
                 list.serializedProperty.GetArrayElementAtIndex(index).objectReferenceValue = null;
             };
-            sprites = renderer.spriteAsset != null || renderer.additionalSpriteAssets != null && renderer.additionalSpriteAssets.Length > 0 ||
-                renderer.spriteSequences != null && renderer.spriteSequences.Length > 0;
-            animation = renderer.defaultAnimation != null;
+            animationList = new ReorderableList(serializedObject, serializedObject.FindProperty("animations"), true, true, true, true);
+            animationList.drawHeaderCallback = rect => EditorGUI.LabelField(rect, "Animations (index 0 = default)");
+            animationList.drawElementCallback = (rect, index, active, focused) =>
+            {
+                rect.y += 2; rect.height = EditorGUIUtility.singleLineHeight;
+                var property = animationList.serializedProperty.GetArrayElementAtIndex(index);
+                var edit = new Rect(rect.xMax - 92, rect.y, 92, rect.height);
+                rect.width -= 98;
+                DrawIndexedAsset(rect, property, index, "Empty uses built-in linear motion.");
+                using (new EditorGUI.DisabledScope(property.objectReferenceValue == null))
+                    if (GUI.Button(edit, "Edit / Preview"))
+                        BrgAnimationEditor.Open((BrgTextAnimation)property.objectReferenceValue, renderer);
+            };
+            animationList.onAddCallback = list =>
+            {
+                int index = list.serializedProperty.arraySize++;
+                list.serializedProperty.GetArrayElementAtIndex(index).objectReferenceValue = null;
+            };
         }
 
         private void Field(string name, string label, string tooltip = null)
@@ -41,12 +56,26 @@ namespace BurstWord.Baseline.Editor
             if (property != null) EditorGUILayout.PropertyField(property, new GUIContent(label, tooltip), true);
         }
 
-        private bool Section(ref bool open, string label)
+        private static void DrawIndexedAsset(Rect rect, SerializedProperty property, int index, string tooltip = null)
         {
-            EditorGUILayout.Space(5);
-            open = EditorGUILayout.Foldout(open, label, true);
+            float labelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = 36;
+            try { EditorGUI.PropertyField(rect, property, new GUIContent("[" + index + "]", tooltip)); }
+            finally { EditorGUIUtility.labelWidth = labelWidth; }
+        }
+
+        private static bool BeginSection(string key, string label)
+        {
+            EditorGUILayout.Space(4);
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            bool previous = SessionState.GetBool(SectionKey + key, true);
+            bool open = EditorGUILayout.Foldout(previous, label, true, EditorStyles.foldoutHeader);
+            if (open != previous) SessionState.SetBool(SectionKey + key, open);
+            if (!open) EditorGUILayout.EndVertical();
             return open;
         }
+
+        private static void EndSection() => EditorGUILayout.EndVertical();
 
         public override void OnInspectorGUI()
         {
@@ -54,40 +83,74 @@ namespace BurstWord.Baseline.Editor
             serializedObject.Update();
             resourceChanges = false;
             using (new EditorGUI.DisabledScope(true)) Field("m_Script", "Script");
-            EditorGUILayout.LabelField("Fonts", EditorStyles.boldLabel);
-            EditorGUI.BeginChangeCheck();
-            Field("font", "Default Font [0]", "fontIndex: 0. Uses this TMP Font Asset's own material and fallback fonts.");
-            resourceChanges |= EditorGUI.EndChangeCheck();
-            Field("fontSize", "Font Size");
-            if (Section(ref fonts, "Font choices (optional)"))
+            if (BeginSection("setup", "Setup"))
+            { DrawSetup(); EndSection(); }
+            if (BeginSection("fonts", "Fonts"))
+            { DrawFonts(); EndSection(); }
+            if (BeginSection("layout", "Text Layout"))
+            { DrawTextLayout(); EndSection(); }
+            if (BeginSection("space", "Space & Occlusion"))
+            { DrawSpace(); EndSection(); }
+            if (serializedObject.FindProperty("spaceMode").enumValueIndex != (int)BrgDamageTextRenderer.SpaceMode.WorldFollow &&
+                BeginSection("scaling", "UI Scaling"))
+            { DrawScreenScaling(); EndSection(); }
+            if (BeginSection("animations", "Animations"))
             {
-                EditorGUI.BeginChangeCheck();
-                EditorGUILayout.HelpBox("fontIndex: 0 = default; 1..N = list order. Effects come from each font's own material. This list selects fonts and resolves <font> names; missing glyphs use TMP fallback lists. Reordering changes indices. Direct font: arguments need no registration.", MessageType.Info);
-                fontList.DoLayoutList();
-                resourceChanges |= EditorGUI.EndChangeCheck();
+                animationList.DoLayoutList();
+                if (animationList.serializedProperty.arraySize == 0)
+                    EditorGUILayout.LabelField("Empty list uses linear motion.", EditorStyles.wordWrappedMiniLabel);
+                EndSection();
             }
+            serializedObject.ApplyModifiedProperties();
+            if (Application.isPlaying && renderer.isActiveAndEnabled && resourceChanges)
+            { renderer.enabled = false; renderer.enabled = true; }
+            if (Application.isPlaying && BeginSection("status", "Runtime Status"))
+            { DrawStatistics(renderer); EndSection(); }
+        }
 
-            EditorGUILayout.Space(5);
-            EditorGUILayout.LabelField("Required settings", EditorStyles.boldLabel);
+        private void DrawSetup()
+        {
             EditorGUI.BeginChangeCheck();
-            Field("worldCamera", "Camera", "The camera that displays this manager's text.");
+            Field("worldCamera", "Camera", "Leave empty to use Camera.main on initialization.");
             resourceChanges |= EditorGUI.EndChangeCheck();
             Field("lifetime", "Lifetime (seconds)");
-            using (new EditorGUI.DisabledScope(Application.isPlaying)) Field("capacity", "Maximum Live Labels");
+            using (new EditorGUI.DisabledScope(Application.isPlaying))
+                Field("capacity", "Maximum Live Labels", "Maximum simultaneous messages. Configure before Play.");
             DrawPipeline();
+        }
 
-            EditorGUILayout.Space(5);
-            EditorGUILayout.LabelField("Space and ordering", EditorStyles.boldLabel);
-            Field("sortingMode", "Occlusion");
-            Field("spaceMode", "Space Mode");
+        private void DrawFonts()
+        {
+            EditorGUI.BeginChangeCheck();
+            Field("font", "Default Text Font [0]", "TMP Font Asset. fontIndex: 0. Uses this resource's own material and fallback fonts.");
+            Field("fontSize", "Font Size");
+            fontList.DoLayoutList();
+            EditorGUILayout.Space(4);
+            Field("useSprites", "Use Sprite Fonts", "Use native TMP Sprite Assets for inline icons and emoji, through Unicode or <sprite> tags.");
+            if (serializedObject.FindProperty("useSprites").boolValue)
+            {
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    Field("spriteAsset", "Default Sprite Font", "TMP Sprite Asset. Empty uses the TMP Settings default sprite asset. Its own fallback sprite assets are searched automatically.");
+                    Field("additionalSpriteAssets", "Named Sprite Fonts", "Optional native TMP Sprite Assets referenced by <sprite=\"AssetName\"> tags. No text-to-image mapping is required.");
+                }
+            }
+            resourceChanges |= EditorGUI.EndChangeCheck();
+        }
+
+        private void DrawSpace()
+        {
+            Field("spaceMode", "Space Mode", "Screen Snapshot binds position on emission; Screen Follow tracks the target at fixed screen size; World Follow uses its complete transform and perspective. Pass a target through EmitText.");
             var space = serializedObject.FindProperty("spaceMode");
             if (space.enumValueIndex == (int)BrgDamageTextRenderer.SpaceMode.WorldFollow)
-                Field("worldUnitsPerLayoutUnit", "World Units Per Layout Unit");
-            else DrawScreenScaling();
-            if (space.enumValueIndex != (int)BrgDamageTextRenderer.SpaceMode.ScreenSnapshot)
-                EditorGUILayout.HelpBox("To follow an object, call EmitText(targetTransform, ...) or update a TextHandle's pose.", MessageType.Info);
+                Field("worldUnitsPerLayoutUnit", "World Units Per Layout Unit", "Converts font size and animation distances from layout units into world units.");
+            Field("sortingMode", "Occlusion", "Every mode sorts whole labels back-to-front. Always In Front overlays the scene; Opaque Occlusion respects opaque depth; Scene Transparent also participates in scene transparency sorting.");
+        }
 
+        private void DrawTextLayout()
+        {
             DrawAlignment();
+            EditorGUILayout.Space(4);
             var width = serializedObject.FindProperty("wrapWidth");
             bool wrapping = width.floatValue > 0;
             bool selected = EditorGUILayout.Toggle("Automatic Wrapping", wrapping);
@@ -96,70 +159,21 @@ namespace BurstWord.Baseline.Editor
                 if (wrapping) { lastWrapWidth = width.floatValue; width.floatValue = 0; }
                 else width.floatValue = Mathf.Max(1, lastWrapWidth);
             }
-            if (selected) Field("wrapWidth", "Wrap Width", "Maximum line width in layout units. An enabled fixed text area can reduce this to its width.");
-
-            if (Section(ref sprites, "Sprites and emoji (optional)"))
+            if (selected)
             {
-                EditorGUI.BeginChangeCheck();
-                Field("useSprites", "Use Sprites / Emoji");
-                if (serializedObject.FindProperty("useSprites").boolValue)
-                {
-                    Field("spriteAsset", "Default Sprite Asset"); Field("additionalSpriteAssets", "Additional Sprite Assets");
-                    Field("spriteSequences", "Text To Sprite Mappings");
-                }
-                resourceChanges |= EditorGUI.EndChangeCheck();
+                using (new EditorGUI.IndentLevelScope())
+                    Field("wrapWidth", "Wrap Width", "Maximum line width in layout units. An enabled fixed text area can reduce this to its width.");
+                width.floatValue = Mathf.Max(1, width.floatValue);
+                lastWrapWidth = width.floatValue;
             }
-            if (Section(ref typography, "Text layout and optional shaping"))
-            {
-                EditorGUI.BeginChangeCheck();
-                Field("richText", "Rich Text Tags"); Field("enableKerning", "Font Kerning");
-                Field("enableShaping", "Use Shaping Provider");
-                if (serializedObject.FindProperty("enableShaping").boolValue)
-                {
-                    Field("textShaper", "Text Shaper");
-                    if (serializedObject.FindProperty("textShaper").objectReferenceValue != null)
-                    { Field("enableLigatures", "Ligatures"); Field("fontSources", "Font Source Override"); }
-                    else EditorGUILayout.HelpBox("None uses TMP glyph data. Install and assign a provider only when complex-script shaping is needed.", MessageType.Info);
-                }
-                resourceChanges |= EditorGUI.EndChangeCheck();
-            }
-            if (Section(ref animation, "GPU animation (optional)"))
-            {
-                Field("useDefaultAnimation", "Use Default Animation");
-                if (serializedObject.FindProperty("useDefaultAnimation").boolValue)
-                    Field("defaultAnimation", "Default Animation");
-                if (serializedObject.FindProperty("useDefaultAnimation").boolValue &&
-                    serializedObject.FindProperty("defaultAnimation").objectReferenceValue != null)
-                {
-                    if (GUILayout.Button("Edit / Preview Animation"))
-                        BrgAnimationEditor.Open((BrgTextAnimation)serializedObject.FindProperty("defaultAnimation").objectReferenceValue, renderer);
-                    Field("animationPresets", "Preloaded Animations");
-                }
-                else
-                {
-                    Field("risePixels", "Linear Rise Distance");
-                    EditorGUILayout.HelpBox("None uses the built-in linear animation. An animation: argument can choose a different preset for each emission.", MessageType.Info);
-                }
-            }
-            if (Section(ref advanced, "Advanced rendering"))
-            {
-                EditorGUI.BeginChangeCheck(); Field("renderBackend", "Backend");
-                resourceChanges |= EditorGUI.EndChangeCheck();
-                Field("enablePreparationJobs", "Batch Preparation Jobs"); Field("tightGlyphBounds", "Tight Glyph Bounds");
-                EditorGUILayout.HelpBox("The glyph shader is selected automatically by the backend. Change it only when supplying a compatible custom shader.", MessageType.Info);
-                EditorGUI.BeginChangeCheck(); Field("glyphShader", "Glyph Shader Override");
-                resourceChanges |= EditorGUI.EndChangeCheck();
-            }
-            serializedObject.ApplyModifiedProperties();
-            if (Application.isPlaying && renderer.isActiveAndEnabled && resourceChanges)
-            { renderer.enabled = false; renderer.enabled = true; }
-            if (Application.isPlaying) DrawStatistics(renderer);
+            EditorGUILayout.Space(4);
+            EditorGUI.BeginChangeCheck();
+            Field("richText", "Rich Text Tags"); Field("enableKerning", "Font Kerning");
+            resourceChanges |= EditorGUI.EndChangeCheck();
         }
 
         private void DrawAlignment()
         {
-            EditorGUILayout.Space(5);
-            EditorGUILayout.LabelField("Text alignment", EditorStyles.boldLabel);
             var anchor = serializedObject.FindProperty("alignment");
             int horizontal = anchor.enumValueIndex % 3, vertical = anchor.enumValueIndex / 3;
             EditorGUILayout.BeginHorizontal(); EditorGUILayout.PrefixLabel("Horizontal");
@@ -171,17 +185,17 @@ namespace BurstWord.Baseline.Editor
             anchor.enumValueIndex = vertical * 3 + horizontal;
             Field("useTextArea", "Use Fixed Text Area", "Off: align against the emission point. On: align within an area centered on that point.");
             if (serializedObject.FindProperty("useTextArea").boolValue)
-                Field("textAreaSize", "Text Area Size", "Width / height in layout units, scaled with the text. This area does not clip overflowing text.");
+                using (new EditorGUI.IndentLevelScope())
+                    Field("textAreaSize", "Text Area Size", "Width / height in layout units, scaled with the text. This area does not clip overflowing text.");
         }
 
         private void DrawScreenScaling()
         {
-            EditorGUILayout.LabelField("UI scaling", EditorStyles.boldLabel);
             Field("scalingCanvas", "Use Existing UI Canvas", "Optional. Uses the root Canvas's actual scale. Leave empty to configure the same modes as Canvas Scaler below.");
             var canvas = serializedObject.FindProperty("scalingCanvas").objectReferenceValue as Canvas;
             if (canvas != null && canvas.rootCanvas.renderMode != RenderMode.WorldSpace)
             {
-                EditorGUILayout.HelpBox("Uses the existing root Canvas's scale factor. No UI objects are created by BurstWord.", MessageType.Info);
+                EditorGUILayout.LabelField("Canvas Scale Factor", canvas.rootCanvas.scaleFactor.ToString("0.###"));
                 return;
             }
             if (canvas != null) EditorGUILayout.HelpBox("Use a screen-space Canvas. A World Space Canvas does not define screen text scaling; manual settings apply instead.", MessageType.Warning);
@@ -195,10 +209,7 @@ namespace BurstWord.Baseline.Editor
                     Field("referenceResolution", "Reference Resolution");
                     Field("screenMatchMode", "Screen Match Mode");
                     if (serializedObject.FindProperty("screenMatchMode").enumValueIndex == (int)CanvasScaler.ScreenMatchMode.MatchWidthOrHeight)
-                    {
                         Field("matchWidthOrHeight", "Match", "0 = Width, 1 = Height. Uses Canvas Scaler's logarithmic interpolation.");
-                        EditorGUILayout.LabelField("", "0 = Width                  1 = Height", EditorStyles.miniLabel);
-                    }
                     break;
                 case CanvasScaler.ScaleMode.ConstantPhysicalSize:
                     Field("physicalUnit", "Physical Unit"); Field("fallbackScreenDPI", "Fallback Screen DPI");
@@ -210,7 +221,9 @@ namespace BurstWord.Baseline.Editor
         {
             var camera = serializedObject.FindProperty("worldCamera").objectReferenceValue as Camera;
             bool ready = BrgRenderingSetup.CheckCamera(camera != null ? camera : Camera.main, out var data, out string message);
-            EditorGUILayout.HelpBox(message, ready ? MessageType.Info : MessageType.Warning);
+            if (ready)
+            { EditorGUILayout.LabelField(new GUIContent("Rendering", message), new GUIContent("Ready")); return; }
+            EditorGUILayout.HelpBox(message, MessageType.Warning);
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("Install BRG Rendering")) BrgRenderingSetup.Install();
@@ -221,8 +234,6 @@ namespace BurstWord.Baseline.Editor
 
         private static void DrawStatistics(BrgDamageTextRenderer renderer)
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Live rendering statistics", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("Active backend", renderer.ActiveBackend.ToString());
             EditorGUILayout.LabelField("Backend selection", renderer.BackendReason);
             EditorGUILayout.LabelField("Typography", renderer.ShaperName);

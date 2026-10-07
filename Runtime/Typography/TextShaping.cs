@@ -7,7 +7,11 @@ using UnityEngine;
 
 namespace BurstWord.Typography
 {
-    /// <summary>Optional shaping factory. No global registration or automatic provider selection.</summary>
+    /// <summary>Optional application-owned shaping callback. Append glyphs to the reusable output list.
+    /// Called on the main thread when layout needs shaping; cached results may be reused.</summary>
+    public delegate void TextShapingCallback(in TextShapingRequest request, List<TextShapingGlyph> output);
+
+    /// <summary>Advanced optional shaping factory for owned font sessions/Jobs. Ordinary callers use TextShapingCallback.</summary>
     public interface ITextShaper
     {
         string Name { get; }
@@ -16,7 +20,7 @@ namespace BurstWord.Typography
         ITextShapingFont CreateFont(TMP_FontAsset font, byte[] openTypeData);
     }
 
-    /// <summary>Inspectable provider asset. Third-party adapters may implement ITextShaper directly instead.</summary>
+    /// <summary>Optional factory base for external adapters. The core manager selects providers through code only.</summary>
     public abstract class TextShaperAsset : ScriptableObject, ITextShaper
     {
         public abstract string Name { get; }
@@ -29,15 +33,49 @@ namespace BurstWord.Typography
     /// RunStart/RunLength lie inside ContextStart/ContextLength; preserve surrounding joining context.</summary>
     public readonly struct TextShapingRequest
     {
+        /// <summary>The actual TMP font after font selection and fallback resolution.</summary>
+        public readonly TMP_FontAsset Font;
         public readonly uint[] CodePoints;
         public readonly int ContextStart, ContextLength, RunStart, RunLength;
         public readonly uint Script;
         public readonly bool RightToLeft, Kerning, Ligatures;
         public TextShapingRequest(uint[] points, int contextStart, int contextLength, int runStart, int runLength,
             uint script, bool rightToLeft, bool kerning, bool ligatures)
+            : this(null, points, contextStart, contextLength, runStart, runLength, script, rightToLeft, kerning, ligatures) { }
+
+        public TextShapingRequest(TMP_FontAsset font, uint[] points, int contextStart, int contextLength, int runStart, int runLength,
+            uint script, bool rightToLeft, bool kerning, bool ligatures)
         {
+            Font=font;
             CodePoints=points; ContextStart=contextStart; ContextLength=contextLength; RunStart=runStart; RunLength=runLength;
             Script=script; RightToLeft=rightToLeft; Kerning=kerning; Ligatures=ligatures;
+        }
+    }
+
+    // Reuse the core's font sessions and layout caches without requiring an application to implement a factory.
+    internal sealed class CallbackTextShaper : ITextShaper
+    {
+        private readonly TextShapingCallback callback;
+        public CallbackTextShaper(TextShapingCallback callback) { this.callback = callback; }
+        public string Name => "Custom callback";
+        public bool RequiresFontData => false;
+        // A callback owns script detection/segmentation within the supplied font/style/direction run.
+        public uint GetScript(uint codePoint) => 0x5a797979; // ISO 15924 Common
+        public ITextShapingFont CreateFont(TMP_FontAsset font, byte[] openTypeData) => new FontSession(font, callback);
+
+        private sealed class FontSession : ITextShapingFont
+        {
+            private readonly TMP_FontAsset font;
+            private readonly TextShapingCallback callback;
+            public FontSession(TMP_FontAsset font, TextShapingCallback callback) { this.font = font; this.callback = callback; }
+            public bool TryGetGlyphIndex(uint codePoint, out uint glyphId)
+            {
+                if (font.characterLookupTable.TryGetValue(codePoint, out var character))
+                { glyphId = character.glyph.index; return true; }
+                glyphId = 0; return false;
+            }
+            public void Shape(in TextShapingRequest request, List<TextShapingGlyph> output) => callback(in request, output);
+            public void Dispose() { }
         }
     }
 

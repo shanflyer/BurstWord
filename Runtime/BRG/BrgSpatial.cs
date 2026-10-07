@@ -192,12 +192,12 @@ namespace BurstWord.BRG
         public TextHandle EmitText(Transform target, string text, Color color, Vector3 offset = default,
             Quaternion? rotation = null, Vector3? scale = null, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
         {
             if (target == null) return default;
             var local = new TextPose(Vector3.zero, rotation ?? Quaternion.identity, scale ?? Vector3.one, offset);
             return EmitSpatial(text, color, target, local, horizontalDrift, durationScale,
-                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
+                ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
         }
         public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift, float durationScale,
             BrgTextAnimation animation, float animationAmplitude)
@@ -205,9 +205,9 @@ namespace BurstWord.BRG
 
         public TextHandle EmitText(TextPose pose, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
             => EmitSpatial(text, color, null, pose, horizontalDrift, durationScale,
-                useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation, animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
+                ResolveAnimation(animation, animationIndex, useLegacyAnimation), animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex);
 
         public bool IsAlive(TextHandle handle) => ReferenceEquals(handle.owner, this) && labels != null &&
             handle.index >= 0 && handle.index < labels.Length && labels[handle.index].active &&
@@ -240,7 +240,7 @@ namespace BurstWord.BRG
                 using (LayoutMarker.Auto()) built = BuildLayout(text, color);
                 if (!built) { FailedLayoutCount++; return default; }
                 return CommitSpatial(target, pose, drift, durationScale, default, 0, layout.Count,
-                    resolvedAnimation ? animation : animation ?? ActiveDefaultAnimation, amplitude);
+                    resolvedAnimation ? animation : animation ?? GetAnimation(0), amplitude);
             }
         }
         private unsafe TextHandle CommitSpatial(Transform target, TextPose pose, float drift, float durationScale,

@@ -3062,8 +3062,8 @@ MonoBehaviour:
   fontSize: 28
   lifetime: 1.5
   risePixels: 90
-  defaultAnimation: {fileID: 0}
-  animationPresets:
+  animations:
+  - {fileID: 0}
   - {fileID: 11400000, guid: dd41b6cc75a849443b53f862199d9f34, type: 2}
   - {fileID: 11400000, guid: 13adad7a08f852349a0064da4370d0d8, type: 2}
   - {fileID: 11400000, guid: 9d91f98d8a286df41858b4eb2dfbcc60, type: 2}
@@ -3075,7 +3075,6 @@ MonoBehaviour:
   richText: 1
   enableKerning: 1
   enableLigatures: 1
-  enableShaping: 1
   wrapWidth: 0
   fonts:
   - {fileID: 11400000, guid: c253666b126f71d449d19ffd32c14f34, type: 2}
@@ -3090,10 +3089,6 @@ MonoBehaviour:
   additionalSpriteAssets: []
   fontSources: {fileID: 11400000, guid: 31f55bb140755ec41b3db17f819ef867, type: 2}
   tightGlyphBounds: 1
-  spriteSequences:
-  - text: "\u263A\uFE0F"
-    asset: {fileID: 11400000, guid: c41005c129ba4d66911b75229fd70b45, type: 2}
-    spriteName: Smiling face with smiling eyes
 --- !u!114 &171200572
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -13,7 +13,7 @@ namespace BurstWord.BRG
         private TMP_SpriteAsset ActiveSpriteAsset => useSprites ? (spriteAsset != null ? spriteAsset : TMP_Settings.defaultSpriteAsset) : null;
         private int LayoutFontSize => hasEmissionAppearance ? emissionFontSize : fontSize;
         // The numeric Job shares one immutable table. Other fonts use their own cached layout.
-        private bool CanUseNumericLayout => ReferenceEquals(LayoutFont, font) && LayoutFontSize == fontSize;
+        private bool CanUseNumericLayout => !ShapingEnabled && ReferenceEquals(LayoutFont, font) && LayoutFontSize == fontSize;
 
         /// <summary>0 selects the default font; 1..N select Fonts in Inspector order.</summary>
         public TMP_FontAsset GetFont(int fontIndex)

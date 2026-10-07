@@ -48,16 +48,20 @@ Position Z、Rotation X/Y 和 Scale Z 仅接受固定中性值（0、0、1）的
 
 ## 代码中选择动画
 
-`renderer.defaultAnimation` 是新发射文字的默认预设。已有文字继续使用发射时选择的预设；编辑同一预设的曲线则影响所有使用它的现存文字。
+管理器只提供一个 **Animations** 列表。编号与列表顺序一致，从 `0` 开始，第一项是默认项；每行的 **Edit / Preview** 打开独立动画编辑器。列表为空或所选项为空时使用内置线性动画。不需要单独设置默认资源、启用开关或预加载列表。旧场景会将原默认动画和预设合并到这一个列表中，保留原默认行为。
+
+代码使用 `animationIndex` 选择动画，不传时使用 `0`。已有文字继续使用发射时选择的预设；修改或重排列表影响后续发射。编辑同一预设的曲线则影响所有使用它的现存文字。
 
 ```csharp
 var pose = new BrgDamageTextRenderer.TextPose(
     position, Quaternion.identity, Vector3.one);
 renderer.EmitText(pose, "<b>12345</b>", Color.white,
-    animation: criticalPreset, animationAmplitude: 1f);
+    fontIndex: 1, animationIndex: 2, animationAmplitude: 1f);
+renderer.Emit(position, 12345, Color.white, animationIndex: 1);
+BrgTextAnimation selected = renderer.GetAnimation(2);
 ```
 
-Transform 跟随发射重载也支持这两个参数。`EmitBatch` 的 `TextEmission` 可以逐条指定 `animation` 和 `animationAmplitude`。倍率只改变曲线位移幅度，不改变缩放、颜色、透明度或寿命。单条不指定预设时使用默认预设；批量请求的 `useLegacyAnimation: true` 可以明确使用原有线性动画。
+Transform 跟随发射重载也支持 `animationIndex`。`EmitBatch` 的 `TextEmission` 可以逐条指定 `animationIndex`、`animation` 和 `animationAmplitude`。直接 `animation:` 资源优先于编号，无需登记。越界编号会抛出参数异常，整批编号先验证，再提交文字。倍率只改变曲线位移幅度，不改变缩放、颜色、透明度或寿命。`useLegacyAnimation: true` 可以明确使用原有线性动画。
 
 ## 执行和性能
 

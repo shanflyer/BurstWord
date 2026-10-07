@@ -14,20 +14,30 @@ namespace BurstWord.Baseline.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("animationClip"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("addHorizontalDrift"), new GUIContent("叠加发射时横向漂移"));
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                EditorGUILayout.LabelField("动画资源", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("animationClip"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("addHorizontalDrift"), new GUIContent("叠加发射时横向漂移"));
+            }
             if (serializedObject.ApplyModifiedProperties()) BrgAnimationClipCompiler.Compile((BrgTextAnimation)target);
             var preset = (BrgTextAnimation)target;
             string error = preset.animationClip != null ? BrgAnimationClipCompiler.Validate(preset.animationClip) : null;
-            if (error != null)
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.HelpBox(error, MessageType.Error);
-                using(new EditorGUI.DisabledScope(!BrgAnimationClipEditing.CanEdit(preset.animationClip)))
-                if (GUILayout.Button("修复非法轨道（可撤销）"))
-                { Undo.RecordObject(preset.animationClip, "修复飘字轨道"); BrgAnimationClipCompiler.EnforceBindings(preset.animationClip); BrgAnimationClipCompiler.Compile(preset); }
+                EditorGUILayout.LabelField("状态与编辑", EditorStyles.boldLabel);
+                if (error != null)
+                {
+                    EditorGUILayout.HelpBox(error, MessageType.Error);
+                    using(new EditorGUI.DisabledScope(!BrgAnimationClipEditing.CanEdit(preset.animationClip)))
+                        if (GUILayout.Button("修复非法轨道（可撤销）"))
+                        { Undo.RecordObject(preset.animationClip, "修复飘字轨道"); BrgAnimationClipCompiler.EnforceBindings(preset.animationClip); BrgAnimationClipCompiler.Compile(preset); }
+                }
+                else if (preset.animationClip != null)
+                    EditorGUILayout.LabelField("采样状态", preset.HasClipSamples ? "已准备" : "尚未准备");
+                EditorGUILayout.LabelField("在独立窗口编辑关键帧与预览；运行时由 GPU 播放。", EditorStyles.wordWrappedMiniLabel);
+                if (GUILayout.Button("打开独立动画编辑器")) BrgAnimationEditor.Open(preset);
             }
-            EditorGUILayout.HelpBox("在独立窗口中拖动、录制关键帧、编辑曲线和播放。编辑数据完全隐藏，无需 Scene 或编辑物体。AnimationClip 编辑后采样，运行时仍由 GPU 播放。", MessageType.Info);
-            if (GUILayout.Button("打开独立动画编辑器")) BrgAnimationEditor.Open(preset);
         }
     }
 
@@ -210,7 +220,12 @@ namespace BurstWord.Baseline.Editor
             EditorGUILayout.Space(); EditorGUILayout.LabelField("当前时间的属性", EditorStyles.boldLabel);
             using (new EditorGUI.DisabledScope(!Editable || !recording))
             {
-                for (int i = 0; i < 7; i++)
+                EditorGUILayout.LabelField("位置、旋转与缩放", EditorStyles.miniBoldLabel);
+                for (int i = 0; i < 5; i++)
+                { EditorGUI.BeginChangeCheck(); float value = EditorGUILayout.FloatField(TrackNames[i], Value(i)); if (EditorGUI.EndChangeCheck()) Write(i, value); }
+                EditorGUILayout.Space(4);
+                EditorGUILayout.LabelField("透明度、亮度与颜色", EditorStyles.miniBoldLabel);
+                for (int i = 5; i < 7; i++)
                 { EditorGUI.BeginChangeCheck(); float value = EditorGUILayout.FloatField(TrackNames[i], Value(i)); if (EditorGUI.EndChangeCheck()) Write(i, value); }
                 EditorGUI.BeginChangeCheck(); Color color = EditorGUILayout.ColorField("颜色", new Color(Value(7), Value(8), Value(9), Value(10)));
                 if (EditorGUI.EndChangeCheck()) { Undo.IncrementCurrentGroup(); int group = Undo.GetCurrentGroup(); for (int i = 0; i < 4; i++) Write(7 + i, color[i]); Undo.CollapseUndoOperations(group); }
@@ -408,8 +423,7 @@ namespace BurstWord.Baseline.Editor
         internal void Restart(string text, float duration, BrgTextAnimation animation)
         {
             Renderer.Clear(); Renderer.EditorPreviewFrame(0); Renderer.lifetime = duration;
-            Renderer.defaultAnimation = animation;
-            Renderer.EmitText(new BrgDamageTextRenderer.TextPose(Vector3.zero, Quaternion.identity, Vector3.one), text, Color.white);
+            Renderer.EmitText(new BrgDamageTextRenderer.TextPose(Vector3.zero, Quaternion.identity, Vector3.one), text, Color.white, animation: animation);
         }
         internal void SetSpace(BrgDamageTextRenderer.SpaceMode space)
         { Renderer.spaceMode = space; camera.orthographic = space != BrgDamageTextRenderer.SpaceMode.WorldFollow; }

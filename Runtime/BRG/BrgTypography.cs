@@ -22,15 +22,19 @@ namespace BurstWord.BRG
         public bool richText = true;
         public bool enableKerning = true;
         public bool enableLigatures = true;
-        public bool enableShaping = true;
-        [Tooltip("Optional shaping adapter. None uses TMP glyph data without an external shaping library.")]
-        public TextShaperAsset textShaper;
         private ITextShaper runtimeShaper;
-        private ITextShaper SelectedShaper => runtimeShaper ?? textShaper;
-        private bool ShapingEnabled => enableShaping && SelectedShaper != null && !shapingUnavailable;
+        private ITextShaper SelectedShaper => runtimeShaper;
+        private bool ShapingEnabled => SelectedShaper != null && !shapingUnavailable;
+        private bool UsesShapingCallback => runtimeShaper is CallbackTextShaper;
         public string ShaperName => ShapingEnabled ? SelectedShaper.Name : "TMP glyph data";
-        /// <summary>Switch providers on the main thread. Clears live text, sessions and all cached layouts.</summary>
-        public void SetTextShaper(ITextShaper provider)
+        /// <summary>Register optional application-owned shaping on the main thread. Null skips shaping.
+        /// Clears live text and cached layouts. Re-register after changing callback settings.</summary>
+        public void SetTextShaper(TextShapingCallback callback)
+            => SetTextShaperProvider(callback == null ? null : new CallbackTextShaper(callback));
+
+        /// <summary>Advanced font-session/Job adapter integration. Not required for a managed callback.
+        /// Switch on the main thread; clears live text, sessions and all cached layouts.</summary>
+        public void SetTextShaperProvider(ITextShaper provider)
         {
             bool restart = isActiveAndEnabled;
             if (restart) enabled = false;
@@ -47,10 +51,8 @@ namespace BurstWord.BRG
         public TMP_SpriteAsset[] additionalSpriteAssets;
         public BrgFontSources fontSources;
         private BrgFontSources[] discoveredFontSources;
-        [Tooltip("Limit transparent glyph margins to the current style/effect extent. Disable for conservative full-atlas bounds.")]
+        [HideInInspector]
         public bool tightGlyphBounds = true;
-        [Serializable] public struct SpriteSequence { public string text; public TMP_SpriteAsset asset; public string spriteName; }
-        public SpriteSequence[] spriteSequences;
 
         public int LastLayoutLineCount { get; private set; }
         public Vector2 LastLayoutSize { get; private set; }
@@ -347,7 +349,6 @@ namespace BurstWord.BRG
                         if (!noParse && ParseTag(tag, ref style)) { i = end; continue; }
                     }
                 }
-                if (TrySequence(text, ref i, style)) continue;
                 uint unicode = text[i];
                 if (unicode == '\r') continue;
                 if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) unicode = (uint)char.ConvertToUtf32(text[i], text[++i]);
@@ -433,8 +434,33 @@ namespace BurstWord.BRG
         }
         private TMP_SpriteAsset FindSpriteAsset(string name)
         {
-            if (spriteAsset != null && spriteAsset.name == name) return spriteAsset;
+            var active = ActiveSpriteAsset;
+            if (active != null && active.name == name) return active;
             if (additionalSpriteAssets != null) foreach (var asset in additionalSpriteAssets) if (asset != null && asset.name == name) return asset;
+            return null;
+        }
+        private readonly HashSet<TMP_SpriteAsset> searchedSpriteNames = new HashSet<TMP_SpriteAsset>();
+        private TMP_SpriteAsset FindSpriteByName(TMP_SpriteAsset asset, string name, out int index)
+        {
+            searchedSpriteNames.Clear();
+            var found = FindSpriteNameInFallbacks(asset, name, out index);
+            if (found == null) found = FindSpriteNameInFallbacks(TMP_Settings.defaultSpriteAsset, name, out index);
+            searchedSpriteNames.Clear();
+            return found;
+        }
+        private TMP_SpriteAsset FindSpriteNameInFallbacks(TMP_SpriteAsset asset, string name, out int index)
+        {
+            index = -1;
+            if (asset == null || !searchedSpriteNames.Add(asset)) return null;
+            // Let the installed TMP version apply its own name hashing/case rules.
+            index = asset.GetSpriteIndexFromName(name);
+            if (index >= 0) return asset;
+            if (asset.fallbackSpriteAssets != null)
+                foreach (var fallback in asset.fallbackSpriteAssets)
+                {
+                    var found = FindSpriteNameInFallbacks(fallback, name, out index);
+                    if (found != null) return found;
+                }
             return null;
         }
         private bool ParseSprite(string tag, TextStyle style)
@@ -446,7 +472,7 @@ namespace BurstWord.BRG
             if (asset == null) { MissingSpriteCount++; return false; }
             string name = Value(tag, "name"), index = Value(tag, "index");
             int id = -1;
-            if (name != null) asset = TMP_SpriteAsset.SearchForSpriteByHashCode(asset, TMP_TextUtilities.GetSimpleHashCode(name), true, out id);
+            if (name != null) asset = FindSpriteByName(asset, name, out id);
             else if (!int.TryParse(index ?? main, out id)) id = 0;
             string tint = Value(tag, "tint"), color = Value(tag, "color");
             if (tint != "1") style.color = new Color(1, 1, 1, style.color.a);
@@ -475,22 +501,6 @@ namespace BurstWord.BRG
             style.color = new Color(1, 1, 1, style.color.a);
             return !ReferenceEquals(found.asset, null) && AddSpriteToken(found.asset, found.index, style);
         }
-        private bool TrySequence(string text, ref int position, TextStyle style)
-        {
-            int found = -1, length = 0;
-            if (!useSprites || spriteSequences == null) return false;
-            for (int i = 0; i < spriteSequences.Length; i++)
-            {
-                string value = spriteSequences[i].text;
-                if (!string.IsNullOrEmpty(value) && value.Length > length && position + value.Length <= text.Length && string.CompareOrdinal(text, position, value, 0, value.Length) == 0) { found = i; length = value.Length; }
-            }
-            if (found < 0) return false;
-            var entry = spriteSequences[found];
-            style.color = new Color(1, 1, 1, style.color.a);
-            if (entry.asset == null || !AddSpriteToken(entry.asset, entry.asset.GetSpriteIndexFromName(entry.spriteName), style)) return false;
-            position += length - 1; return true;
-        }
-
         private bool ResolveStyled(uint unicode, TextStyle style, out ResolvedGlyph resolved, out bool alternative)
         {
             alternative = false;
@@ -554,14 +564,18 @@ namespace BurstWord.BRG
         {
             if (!ShapingEnabled) return null;
             if (shapingFaces.TryGetValue(asset, out var face)) return face;
-            var bytes = fontSources != null ? fontSources.Find(asset) : null;
-            if (bytes == null)
+            TextAsset bytes = null;
+            if (SelectedShaper.RequiresFontData)
             {
-                if (discoveredFontSources == null) discoveredFontSources = Resources.LoadAll<BrgFontSources>("");
-                foreach (var catalog in discoveredFontSources)
+                bytes = fontSources != null ? fontSources.Find(asset) : null;
+                if (bytes == null)
                 {
-                    bytes = catalog.Find(asset);
-                    if (bytes != null) break;
+                    if (discoveredFontSources == null) discoveredFontSources = Resources.LoadAll<BrgFontSources>("");
+                    foreach (var catalog in discoveredFontSources)
+                    {
+                        bytes = catalog.Find(asset);
+                        if (bytes != null) break;
+                    }
                 }
             }
             if (bytes == null && SelectedShaper.RequiresFontData)
@@ -794,6 +808,7 @@ namespace BurstWord.BRG
         private sealed unsafe class ShapingFace : IDisposable
         {
             public readonly IntPtr NativeFont;
+            public TMP_FontAsset Font => font;
             private readonly TMP_FontAsset font;
             private readonly Dictionary<uint, ResolvedGlyph> glyphs = new Dictionary<uint, ResolvedGlyph>();
             private readonly Dictionary<uint, uint> nominalGlyphs = new Dictionary<uint, uint>();

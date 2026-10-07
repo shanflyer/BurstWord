@@ -28,6 +28,7 @@ namespace BurstWord.BRG
         private double previousEmissionTime = -1;
         private float elapsed, nextOverlay;
         private int sampleNumber, oldVSync, oldTarget;
+        private int animationIndex;
         private string overlay = "Warming up...";
         public float AverageFrameMilliseconds => statistics == null ? 0 : statistics.AverageFrameMilliseconds;
         private static readonly string[] ModeNames = { "Mixed", "Numbers", "CJK", "Complex Scripts", "Rich Text", "Effects", "Color Emoji", "Word Wrap" };
@@ -39,7 +40,7 @@ namespace BurstWord.BRG
         private static readonly string[] EffectText = { "{0}", "{0}", "<b>暴击 {0}</b>" };
         // Fonts 7 and 8 own their outline/shadow and glow materials respectively.
         private static int EffectFontIndex(int template) => template % EffectText.Length == 1 ? 8 : 7;
-        private static readonly string[] EmojiText = { "<sprite=0> {0}", "<sprite=1> {0}", "😊 {0}", "☺️ {0}" };
+        private static readonly string[] EmojiText = { "<sprite=0> {0}", "<sprite=1> {0}", "😊 {0}", "<sprite name=\"1f60b\"> {0}" };
         private static readonly string[] WrapText = { "伤害 {0} 自动换行测试文字", "Damage {0} word wrapping test", "伤害 {0} العربية नमस्ते" };
 
         private void Start()
@@ -146,7 +147,7 @@ namespace BurstWord.BRG
                     follow ? target.InverseTransformPoint(position) : Vector3.zero);
                 emissionRequests[requestCount++] = new BrgDamageTextRenderer.TextEmission(text, color, pose,
                     mode == Workload.Wrapping ? 140 : 0, drift, duration, follow ? target : null,
-                    fontIndex: mode == Workload.Effects ? EffectFontIndex(index) : 0);
+                    fontIndex: mode == Workload.Effects ? EffectFontIndex(index) : 0, animationIndex: animationIndex);
                 sampleNumber++;
             }
             try { textRenderer.EmitBatch(emissionRequests, requestCount); }
@@ -249,10 +250,11 @@ namespace BurstWord.BRG
             if(GUILayout.Button("World Size /2")) { textRenderer.worldUnitsPerLayoutUnit=Mathf.Max(.000001f,textRenderer.worldUnitsPerLayoutUnit*.5f);ResetPressure(); }
             if(GUILayout.Button("World Size x2")) { textRenderer.worldUnitsPerLayoutUnit*=2;ResetPressure(); }
             GUILayout.EndHorizontal();GUI.enabled=previousEnabled;
-            if(GUILayout.Button("GPU Animation: "+(textRenderer.defaultAnimation==null?"Linear":textRenderer.defaultAnimation.name)+" (Click to Cycle)"))
+            var selectedAnimation = textRenderer.GetAnimation(animationIndex);
+            if(GUILayout.Button("Animation ["+animationIndex+"]: "+(selectedAnimation==null?"Linear":selectedAnimation.name)+" (Click to Cycle)"))
             {
-                var presets=textRenderer.animationPresets;int index=System.Array.IndexOf(presets,textRenderer.defaultAnimation)+1;
-                textRenderer.defaultAnimation=index<presets.Length?presets[index]:null;ResetPressure();
+                animationIndex = (animationIndex + 1) % Mathf.Max(1, textRenderer.animations == null ? 0 : textRenderer.animations.Length);
+                ResetPressure();
             }
             if(GUILayout.Button("Hide Panel (F1 to Restore)"))showControls=false;
             GUILayout.EndArea();GUI.EndScrollView();GUI.skin.font=previous;

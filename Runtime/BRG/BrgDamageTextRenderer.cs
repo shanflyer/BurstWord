@@ -21,11 +21,11 @@ namespace BurstWord.BRG
     {
         [Min(1)] public int capacity = 10000;
         public TMP_FontAsset font;
-        public Shader glyphShader;
+        [HideInInspector] public Shader glyphShader;
         public Camera worldCamera;
         [Min(1)] public int fontSize = 28;
         [Min(0.01f)] public float lifetime = 1.5f;
-        public float risePixels = 90;
+        [HideInInspector] public float risePixels = 90;
         public Vector2 referenceResolution = new Vector2(1920, 1080);
 
         public string BackendName => $"TMP Font Asset + {ActiveBackend} (no label GameObjects)";
@@ -174,13 +174,13 @@ namespace BurstWord.BRG
 
         public bool Emit(Vector3 worldPosition, int damage, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
         {
             if (!isActiveAndEnabled || !IsInitialized) return false;
             if (freeLabelCount == 0) { DroppedCount++; return false; }
             // Keep the same integer-to-string work as the baseline for this first comparison.
             return EmitText(worldPosition, damage.ToString(CultureInfo.InvariantCulture), color, horizontalDrift,
-                durationScale, animation, animationAmplitude, font, fontSize, useLegacyAnimation, alignment, textAreaSize, fontIndex);
+                durationScale, animation, animationAmplitude, font, fontSize, useLegacyAnimation, alignment, textAreaSize, fontIndex, animationIndex);
         }
 
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift, float durationScale)
@@ -188,9 +188,9 @@ namespace BurstWord.BRG
 
         public bool EmitText(Vector3 worldPosition, string text, Color color, float horizontalDrift = 0, float durationScale = 1,
             BrgTextAnimation animation = null, float animationAmplitude = 1, TMP_FontAsset font = null,
-            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0)
+            int fontSize = 0, bool useLegacyAnimation = false, TextAnchor? alignment = null, Vector2? textAreaSize = null, int fontIndex = 0, int animationIndex = 0)
             => EmitSpatial(text, color, null, new TextPose(worldPosition, Quaternion.identity, Vector3.one),
-                horizontalDrift, durationScale, useLegacyAnimation ? null : animation ?? ActiveDefaultAnimation,
+                horizontalDrift, durationScale, ResolveAnimation(animation, animationIndex, useLegacyAnimation),
                 animationAmplitude, true, font, fontSize, alignment, textAreaSize, fontIndex).IsAlive;
 
         private bool BuildBasicLayout(string text, Color color)

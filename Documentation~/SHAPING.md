@@ -1,62 +1,71 @@
-# Optional text shaping
+# Optional text shaping callback
 
-BurstWord reads TMP font assets directly. Its default path supports glyph lookup/fallbacks, TMP pair-adjustment data, supported rich text, sprites, bidi ordering and Unicode wrapping without a native shaping library. It does not promise TMP's entire layout/tag API. Arabic joining, Indic rearrangement, OpenType ligatures and contextual mark positioning require a shaping provider. Bidi ordering and font coverage are separate capabilities.
+BurstWord exposes an optional code callback. It does not choose a language plugin, require a shaping Asset, or load a shaping library for you. Without a callback, layout uses TMP font glyph data, native fallbacks, pair adjustments, supported rich text, sprites, bidi ordering and Unicode wrapping. A font's glyph coverage and contextual shaping are separate capabilities.
 
-## Selecting a provider
-
-Assign a `TextShaperAsset` to the renderer's **Text Shaper** field, with **Enable Shaping** enabled. Leaving the field empty uses TMP glyph data. There is no automatic global registration or provider selection.
-
-Code may supply a factory directly:
+## Register or remove
 
 ```csharp
+using System.Collections.Generic;
 using BurstWord.Typography;
-// provider implements ITextShaper; renderer is BrgDamageTextRenderer.
-renderer.SetTextShaper(provider);
+
+// Your method has this signature:
+// void ShapeText(in TextShapingRequest input, List<TextShapingGlyph> output)
+renderer.SetTextShaper(ShapeText);
+
+// Remove the callback and skip shaping:
+renderer.SetTextShaper(null);
 ```
 
-Call on the main thread. Switching clears active text, all typography/layout/preparation caches, worker buffers and font sessions before reinitializing. `SetTextShaper(null)` removes the runtime override and uses the Inspector asset, if assigned. To use the default path, clear that asset too. Set configuration before initialization; for runtime changes to font/provider configuration, disable/reconfigure/re-enable the renderer, or use `SetTextShaper` for a factory change. Changing private provider configuration needs the same restart.
+Implement `ShapeText` yourself or translate your chosen plugin's result into the output format below. No factory, session class or ScriptableObject is needed. This is a glyph-layout contract; a string-only replacement plugin needs a small bridge to glyph IDs and original clusters.
 
-The benchmark displays the active typography name. If a selected adapter's native library/entry point is missing, BurstWord warns once and returns to TMP glyph data. This preserves rendering, not complex-script correctness. Missing per-font source/session support is counted as unavailable shaping.
+Register on the main thread, before emitting text. Replacing/removing a callback completes pending jobs, releases font sessions and generated resources, and clears live labels and layout caches. Re-register after changing settings captured by the callback so stale results cannot survive. A disabled renderer can also be configured before enabling it. BurstWord does not own/dispose resources captured by an application delegate.
 
-## Adapter contract
+## Input
 
-The public interfaces are in `Runtime/Typography/TextShaping.cs` (`BurstWord.Typography`):
+`TextShapingRequest` is a read-only struct:
 
-- `ITextShaper`: factory name, whether original OpenType bytes are required, script discovery and font-session creation.
-- `TextShaperAsset`: optional ScriptableObject factory for Inspector selection.
-- `ITextShapingFont`: nominal glyph lookup, shaping into a caller-owned reusable list, and disposal.
-- `IJobTextShapingFont`: optional immutable worker handle plus Burst-compatible function pointers.
+- `Font`: the actual `TMP_FontAsset`, after font selection, alternate typeface and fallback resolution. Output glyph IDs must belong to this font's original face.
+- `CodePoints`: a reusable UTF-32 array. Only the supplied context range is valid; do not modify or retain it.
+- `ContextStart`, `ContextLength`: surrounding text available for contextual shaping.
+- `RunStart`, `RunLength`: the part of that context to shape. All indexes are absolute UTF-32 indexes into `CodePoints`, including after explicit newlines; they are not UTF-16 string offsets.
+- `RightToLeft`: resolved direction of this run. Fonts, styles, sprites/tabs and bidi levels are already separated by the renderer.
+- `Kerning`, `Ligatures`: requested feature flags. A callback owns how its implementation handles those features.
+- `Script`: ISO 15924 four-character tag packed into a uint. The simple callback path supplies Common (`0x5a797979`); detect/segment scripts in your own implementation if needed. Advanced providers may supply precise script tags.
 
-A normal C# plugin needs only the first interfaces. It can use its own font source or set `RequiresFontData` to true to request bytes from `BrgFontSources`. `CreateFont` receives the actual resolved TMP font, so returned glyph IDs must belong to that font's original face. A plugin that only transforms a string (for example into Arabic presentation-form characters) needs an adapter translating its result back into glyphs and original clusters; attaching that plugin does not automatically satisfy this contract.
+Inputs are text-layout data. Per-label position, lifetime and animation remain in BurstWord's rendering path and do not belong in shaping. Keep the callback's result deterministic for the request and its registered settings so caching remains valid.
 
-`TextShapingRequest` contains a reusable UTF-32 array. All context/run indexes refer to that array. Preserve the supplied surrounding context when shaping a sub-run; do not retain or modify the input. The renderer has already divided fonts/styles, resolved bidi levels and selected direction. `Script` uses ISO 15924 four-character tags packed into a uint, for example Latin `0x4c61746e`, Common `0x5a797979` and Inherited `0x5a696e68`.
+## Output
 
-Append `TextShapingGlyph` results in the run's visual order. `Cluster` is an **absolute UTF-32 input index**, not a UTF-16 index or output glyph index. Multiple glyphs may belong to one cluster. Advances and offsets are in the supplied font's `faceInfo.pointSize` units, Y up; the core applies text size and font scale once. Return finite metrics and clusters inside the run. `UnsafeToBreak` marks boundaries that cannot reuse an independently shaped cached line. Preserve clusters/substitution semantics across wrapping. The core owns wrapping, decoration, generated atlas glyphs and rendering; the adapter supplies typography data only.
+Append `TextShapingGlyph` values to the supplied reusable `List<TextShapingGlyph>`. BurstWord clears it before each call. Do not retain it, replace it, or allocate an intermediate list on every call when your plugin supports writing directly.
 
-A minimal factory/session outline:
+- `GlyphId`: a glyph index in `input.Font`'s original font face, not a Unicode code point or character-table index.
+- `Cluster`: absolute UTF-32 input index within `[RunStart, RunStart + RunLength)`. Several glyphs can share one cluster; substitutions/ligatures must preserve their source cluster.
+- `Advance`, `OffsetX`, `OffsetY`: finite metrics in `Font.faceInfo.pointSize` units, with Y pointing up. The renderer applies font size and font scale once.
+- `Flags`: set `TextShapingGlyph.UnsafeToBreak` where splitting the shaped text would invalidate its contextual result. The renderer uses this when reusing measured glyphs across wrapping. If your bridge cannot certify a boundary, mark it unsafe.
 
-```csharp
-public sealed class MyShaper : TextShaperAsset
-{
-    public override string Name => "My plugin";
-    public override bool RequiresFontData => false;
-    public override uint GetScript(uint point) => MyPluginScript(point);
-    public override ITextShapingFont CreateFont(TMP_FontAsset font, byte[] data)
-        => new MyFontSession(font);
-    // MyFontSession implements nominal lookup, Shape and Dispose using your plugin.
-}
-```
+Return glyphs in visual order within the run. Include every glyph needed to display that run; an empty result produces no glyphs. The core validates clusters and metrics. It retains responsibility for line layout, wrapping, alignment, decorations, glyph atlas preparation, sorting and BRG/instancing rendering. Missing shaped glyphs can be added through Unity FontEngine when a compatible original font source is available; a static atlas alone cannot supply glyphs it does not contain.
 
-The plugin owns its font session until `Dispose`. It must not retain Unity text components or create an object per label. FontEngine glyph-atlas updates remain on the main thread. Keep sessions stable/immutable while the renderer caches their output.
+## Execution and performance
 
-## Optional Job acceleration
+A registered callback is used for text needing shaping, including plain numbers. No callback restores the original numeric fast paths. Sprite glyphs and tabs are handled directly by the core.
 
-Ordinary managed providers shape on the main thread and still use layout caches, numerical preparation and instance-write jobs. For repeated contextual text preparation in jobs, implement `IJobTextShapingFont`. The supplied HarfBuzz adapter does so. Default TMP wrapping also compiles glyph metrics and pair adjustments into immutable job data, without accessing TMP objects from workers.
+The managed callback executes synchronously on the main thread. It is not invoked inside Burst jobs. Exact repeated requests can reuse cached output; registration does not mean one callback invocation per emission. The callback cache checks the full context, font, run range, direction and features. It does not assume that words are independent or that changing a damage digit preserves the returned glyphs. Layout/resource caches and instance-write jobs remain available. Changing callback behavior without re-registering violates the cache contract.
 
-`TextShapingFunctions` holds `FunctionPointer<ShapeTextRun>` and `FunctionPointer<ReleaseTextWorker>`. Both must be valid. The job receives an immutable font handle, a per-thread worker pointer passed by reference, UTF-32 text/context, a sub-run and feature flags (RTL=1, kerning=2, ligatures=4). Job clusters are relative to this input pointer; unlike managed requests there is no separate context offset. Return an unmanaged glyph buffer owned by the worker, valid until its next shaping call. Reuse it instead of allocating per call. Release must free the worker/buffer. All sessions from one factory must use the same function pair; worker state must safely handle changing fonts. Compile callbacks with Burst and preserve them for IL2CPP/AOT. The core completes jobs before invoking worker cleanup and then disposing font sessions.
+## Advanced native Job integration
 
-Metric/cluster checks are performed on each dynamic request before a cached prepared layout is used. Incompatible values use the full layout path in that frame. This is not asynchronous Unity API access or delayed text display.
+`SetTextShaperProvider(ITextShaper provider)` is a separate, explicit integration point for adapters that need owned font sessions or native Job acceleration. It is not required to use a delegate. There is no automatic provider selection or Inspector provider field. `SetTextShaper(null)` also removes an advanced provider.
 
-## HarfBuzz option
+The existing interfaces in `Runtime/Typography/TextShaping.cs` remain available:
 
-The separate `Adapters~/HarfBuzz` package includes the existing HarfBuzz 8.3.1 integration and a ready-made shaper asset. No native code is imported by the core package. Install/selection and platform details are in the [adapter README](../Adapters~/HarfBuzz/README.md). Original source data is prepared automatically before Play/build; the optional manual menu is **Tools → BurstWord → HarfBuzz → Prepare Font Sources**. Source assets/catalogs belong to the consumer project under `Assets/BurstWord/Resources`, not the installed package.
+- `ITextShaper`: factory name, optional font-data requirement, script detection and font-session creation.
+- `ITextShapingFont`: nominal glyph lookup, shaping and disposal.
+- `IJobTextShapingFont`: optional immutable worker handle and Burst-compatible function pointers.
+- `TextShaperAsset`: an optional factory base for external adapters; the core manager does not require or expose such an Asset.
+
+An advanced provider that requests original font bytes can use `BrgFontSources`. Ordinary delegates do not scan/load those catalogs. Provider sessions remain stable while their output is cached and are disposed after jobs complete.
+
+`TextShapingFunctions` contains `FunctionPointer<ShapeTextRun>` and `FunctionPointer<ReleaseTextWorker>`. Both must be valid. The job receives an immutable font handle, a per-thread worker pointer passed by reference, UTF-32 text/context, a sub-run and feature flags (RTL=1, kerning=2, ligatures=4). Job clusters are relative to its input pointer. Return an unmanaged glyph buffer owned by the worker, valid until its next call; reuse it and free it in Release. Sessions from one factory must use the same function pair, and worker state must safely handle changing fonts. Preserve callbacks for IL2CPP/AOT. The core completes jobs before worker/session cleanup.
+
+## Optional HarfBuzz adapter
+
+The separate `Adapters~/HarfBuzz` package is one optional implementation. Installing it does not activate it. Explicitly call `renderer.SetTextShaperProvider(harfBuzz)` with that adapter's factory if you choose its native Job integration. Font-data preparation and target-specific libraries belong to the adapter package. Details are in the [adapter README](../Adapters~/HarfBuzz/README.md). The core does not need it to use a delegate or render ordinary TMP glyphs.

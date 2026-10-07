@@ -6,7 +6,7 @@ Optional OpenType shaping for BurstWord, Unity 2022.3 and newer. Install the Bur
 https://github.com/shanflyer/BurstWord.git?path=/Adapters~/HarfBuzz#v0.3.0
 ```
 
-Assign `Runtime/HarfBuzz.asset` from this package to **Typography → Text Shaper** on your `BrgDamageTextRenderer`. Keep **Enable Shaping** enabled. Installation does not select it automatically. The adapter creates no object per text and preserves the shaping caches and Burst job-preparation path. You can also supply this asset through `SetTextShaper`.
+Explicitly pass `Runtime/HarfBuzz.asset` from this package to `renderer.SetTextShaperProvider(harfBuzz)` in your initialization code. Installation does not select it automatically. The core manager has no shaping Asset field or enable switch. The adapter creates no object per text and preserves the shaping caches and Burst job-preparation path. `renderer.SetTextShaper(null)` removes it and returns to standard TMP glyph-data layout. This factory API is an advanced option for native Job integration; ordinary third-party integrations can use the core's simpler `TextShapingCallback` delegate without an Asset.
 
 The editor prepares original font data/catalogs before Play and before build, using fonts referenced by TMP assets in your project's Assets. For fonts supplied by another package, ensure the consuming project has a TMP asset referencing that font or supply a `BrgFontSources` catalog. Font sources must exist, be readable and contain the required glyphs. Data is written under `Assets/BurstWord/Resources`; imported benchmark sources are already supplied. Use **Tools → BurstWord → HarfBuzz → Prepare Font Sources** for an explicit refresh.
 

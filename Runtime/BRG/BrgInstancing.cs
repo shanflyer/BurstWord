@@ -6,8 +6,8 @@ namespace BurstWord.BRG
     public sealed partial class BrgDamageTextRenderer
     {
         public enum RenderBackend { Auto, BRG, Instancing }
-        [Header("Rendering backend")]
-        [Tooltip("Auto prefers BRG. Unsupported devices fall back to ordinary GPU instancing. Instancing can be forced for comparison.")]
+        // Runtime override for benchmarks. Normal use automatically selects the supported backend.
+        [HideInInspector]
         public RenderBackend renderBackend = RenderBackend.Auto;
         public RenderBackend ActiveBackend { get; private set; }
         public string BackendReason { get; private set; }

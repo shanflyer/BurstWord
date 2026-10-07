@@ -3,14 +3,47 @@ using UnityEngine;
 
 namespace BurstWord.BRG
 {
-    public sealed partial class BrgDamageTextRenderer
+    public sealed partial class BrgDamageTextRenderer : ISerializationCallbackReceiver
     {
-        [Header("GPU animation")]
-        public bool useDefaultAnimation = true;
-        [Tooltip("Null keeps the original low-cost linear animation. Curves are shared GPU samples; no per-label CPU curve evaluation.")]
-        public BrgTextAnimation defaultAnimation;
-        public BrgTextAnimation[] animationPresets = new BrgTextAnimation[0];
-        private BrgTextAnimation ActiveDefaultAnimation => useDefaultAnimation ? defaultAnimation : null;
+        [Tooltip("Animation choices by index. Index 0 is the default. An empty slot uses built-in linear motion. Curves are shared GPU samples.")]
+        public BrgTextAnimation[] animations = new BrgTextAnimation[0];
+
+        // Migrate older scenes into one list, preserving their former default at index 0.
+        [SerializeField, HideInInspector, UnityEngine.Serialization.FormerlySerializedAs("defaultAnimation")]
+        private BrgTextAnimation legacyDefaultAnimation;
+        [SerializeField, HideInInspector, UnityEngine.Serialization.FormerlySerializedAs("animationPresets")]
+        private BrgTextAnimation[] legacyAnimationPresets;
+        [SerializeField, HideInInspector, UnityEngine.Serialization.FormerlySerializedAs("useDefaultAnimation")]
+        private bool legacyUseDefaultAnimation = true;
+        public void OnBeforeSerialize() { }
+        public void OnAfterDeserialize()
+        {
+            if (legacyAnimationPresets == null && ReferenceEquals(legacyDefaultAnimation, null) && legacyUseDefaultAnimation) return;
+            if (animations == null || animations.Length == 0)
+            {
+                var choices = new List<BrgTextAnimation> { legacyUseDefaultAnimation ? legacyDefaultAnimation : null };
+                if (legacyAnimationPresets != null)
+                    foreach (var preset in legacyAnimationPresets)
+                    {
+                        bool duplicate = false;
+                        foreach (var choice in choices) if (ReferenceEquals(preset, choice)) { duplicate = true; break; }
+                        if (!duplicate) choices.Add(preset);
+                    }
+                animations = choices.ToArray();
+            }
+            legacyDefaultAnimation = null; legacyAnimationPresets = null; legacyUseDefaultAnimation = true;
+        }
+
+        /// <summary>Index 0 is the first/default choice. An empty list or empty slot uses linear motion.</summary>
+        public BrgTextAnimation GetAnimation(int animationIndex)
+        {
+            if (animationIndex == 0 && (animations == null || animations.Length == 0)) return null;
+            if (animationIndex < 0 || animations == null || animationIndex >= animations.Length)
+                throw new System.ArgumentOutOfRangeException(nameof(animationIndex), animationIndex, "Animation index must match an entry in the animation list (0 is the default).");
+            return animations[animationIndex];
+        }
+        private BrgTextAnimation ResolveAnimation(BrgTextAnimation asset, int animationIndex, bool linear)
+            => linear ? null : asset != null ? asset : GetAnimation(animationIndex);
         private sealed class AnimationEntry
         {
             public BrgTextAnimation asset;

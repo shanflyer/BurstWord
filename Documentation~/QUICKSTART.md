@@ -8,7 +8,7 @@
 
 安装后执行 **Tools → BurstWord → Install BRG Rendering**。打开游戏相机实际使用的 URP Renderer Data，确认 **Renderer Features → BurstWord ordered text** 存在且启用。仅安装依赖包不等于已经正确选择项目的管线。
 
-多管线项目需检查 Project Settings → Graphics 和 Quality 的 URP 配置，以及相机的 Renderer 选择。Install 会配置 Assets 中的 URP 管线、添加 Renderer Feature 并保留绘制所需的 shader/instancing 变体。管理器 Inspector 会检查当前质量级别及指定相机的 Renderer，可点击 **Install BRG Rendering** 修复，或 **Select Renderer Data** 直接定位。
+多管线项目需检查 Project Settings → Graphics 和 Quality 的 URP 配置，以及相机的 Renderer 选择。Install 会配置 Assets 中的 URP 管线、添加 Renderer Feature 并保留绘制所需的 shader/instancing 变体。管理器 Inspector 的 Setup 区会检查当前质量级别及指定相机的 Renderer；缺少配置时，可点击 **Install BRG Rendering** 修复，或 **Select Renderer Data** 直接定位。
 
 ## 2. 准备字体
 
@@ -18,13 +18,13 @@
 
 ## 3. 创建管理器
 
-在场景创建空物体，添加 **Brg Damage Text Renderer**。指定 **Default Font [0]** 和 **Camera**，设置字号、Lifetime 和 Maximum Live Labels。保持默认屏幕空间和最前显示即可开始。
+在场景创建空物体，添加 **Brg Damage Text Renderer**。指定 **Default Text Font [0]** 和 **Camera**，设置字号、Lifetime 和 Maximum Live Labels。保持默认屏幕空间和最前显示即可开始。
 
 默认不自动发射文字。角色受伤时由业务代码调用发射接口。一个管理器可处理多字体、多效果和多动画，无需每种效果创建一个管理器。
 
 ### 和普通 UI 使用相同的缩放
 
-在 **Space and ordering → UI scaling** 中设置。只有 Screen Snapshot / Screen Follow 显示这些设置，World Follow 使用世界尺寸和镜头透视。
+在 **UI Scaling** 中设置。只有 Screen Snapshot / Screen Follow 显示这些设置，World Follow 使用世界尺寸和镜头透视。
 
 最方便的方式是将游戏已有的屏幕空间 Canvas 拖入 **Use Existing UI Canvas**。飘字直接使用其根 Canvas 的实际缩放值，跟随 Canvas Scaler 的设置与运行时变化；不创建新的 Canvas 或文字 UI 对象。World Space Canvas 不适用于这个选项。
 
@@ -40,7 +40,7 @@
 
 ### 横向和纵向对齐
 
-管理器的 **Text alignment** 提供 **Horizontal：Left / Center / Right** 和 **Vertical：Top / Middle / Bottom**，可组合成九种对齐方式。默认仍是横向、纵向居中。
+管理器的 **Text Layout** 提供 **Horizontal：Left / Center / Right** 和 **Vertical：Top / Middle / Bottom**，可组合成九种对齐方式。默认仍是横向、纵向居中。
 
 - **Use Fixed Text Area 关闭**：以发射位置为锚点。Left 从该点向右排，Right 向左排；Top 向下排，Bottom 向上排，多行文字使用相同的对齐边。
 - **Use Fixed Text Area 开启**：设置 **Text Area Size** 的宽、高，在以发射位置为中心的区域内对齐，类似 UI Text 在 RectTransform 内对齐。区域仅保存数值，不创建 UI 对象，也不裁剪超出的文字。
@@ -95,7 +95,7 @@ damageText.EmitText(hitPosition, "Healing +200", Color.green,
     font: healingFont, animation: healingAnimation);
 ```
 
-也可以在 Inspector 的 **Fonts → Font choices** 列表登记字体，按显示的编号选择：
+也可以在 Inspector 的 **Fonts → Additional Text Fonts [1..N]** 列表登记字体，按显示的编号选择：
 
 - `0`：Default Font。
 - `1`：列表第一项；`2`：第二项，依次类推。
@@ -116,7 +116,15 @@ damageText.EmitText(target, "1234", Color.white, offset: Vector3.up * 1.5f,
 TMP_FontAsset selectedFont = damageText.GetFont(1);
 ```
 
-`fontSize` 大于 0 时覆盖本条字号，0 使用管理器字号。`animation` 留空使用启用的 Default Animation；`useLegacyAnimation: true` 明确选择内置线性动画。动画可以在 **Tools → BurstWord → Animation Editor** 中新建、编辑并保存，无需示例资源。逐条参数不修改管理器默认值，也不替换已存在的飘字。
+`fontSize` 大于 0 时覆盖本条字号，0 使用管理器字号。动画统一放在 Inspector 的 **Animations** 列表，按显示编号选择：`0` 是第一项，也是默认项；不传 `animationIndex` 时使用 `0`。列表为空或所选项为空时使用内置线性动画。每行的 **Edit / Preview** 打开独立动画编辑器，也可通过 **Tools → BurstWord → Animation Editor** 新建动画，无需示例资源。
+
+```csharp
+damageText.EmitText(hitPosition, "1234", Color.white, fontIndex: 1, animationIndex: 2);
+damageText.Emit(hitPosition, 1234, Color.white, animationIndex: 1);
+BrgTextAnimation selectedAnimation = damageText.GetAnimation(2);
+```
+
+也可直接传入 `animation:` 资源，优先于编号，无需登记到列表。`useLegacyAnimation: true` 保留为代码中明确选择线性动画的方式。改变列表顺序会改变后续发射的编号含义；已有飘字继续使用发射时选定的资源。逐条参数不修改管理器默认项。
 
 ## 6. 批量发射
 
@@ -126,7 +134,7 @@ TMP_FontAsset selectedFont = damageText.GetFont(1);
 requests[0] = new BrgDamageTextRenderer.TextEmission(
     "Critical 1234", Color.yellow,
     new BrgDamageTextRenderer.TextPose(hitPosition, Quaternion.identity, Vector3.one),
-    fontIndex: 1, animation: criticalAnimation, fontSize: 40);
+    fontIndex: 1, animationIndex: 2, fontSize: 40);
 
 requests[1] = new BrgDamageTextRenderer.TextEmission(
     "Healing +200", Color.green,
@@ -140,13 +148,51 @@ damageText.EmitBatch(requests, 2);
 
 ## 7. Inspector 的可选设置
 
-基础字体、相机、字号、寿命、容量和管线状态直接显示。其余按功能分组：
+Inspector 按使用目的分区，默认展开，并在当前编辑器会话内记住折叠状态：
 
-- **Automatic Wrapping**：关闭时隐藏 Wrap Width；关闭实际设置为不自动换行。
-- **Fonts**：Default Font [0]、字号和带编号的 Font choices 放在同一组。每个字体读取自己的材质和 fallback；字体列表供 `fontIndex` 选择和 `<font>` 标签查找。
-- **Sprites and emoji**：关闭时隐藏图集及文本到 Sprite 的映射，并停止这些 Sprite 替换。
-- **Text layout and optional shaping**：关闭塑形时隐藏适配器设置；没有选择适配器时隐藏连字和字体源覆盖。
-- **GPU animation**：关闭默认预设时隐藏预设字段，使用线性动画；直接 `animation:` 参数仍可使用。
-- **Advanced rendering**：通常保持默认，Backend 为 Auto，批量 Job 和紧凑字形边界开启，shader 自动选择。
+- **Setup**：相机、寿命、最大同时存在数量，以及管线状态。缺少配置时显示 Install BRG Rendering；已配置时显示 Rendering Ready。
+- **Fonts**：普通文字字体和 Sprite 图片字体统一放在这组。Default Text Font [0]、字号和 Additional Text Fonts [1..N] 使用原生 `TMP_FontAsset`，列表供 `fontIndex` 和 `<font>` 标签选择。Use Sprite Fonts 开启后显示 Default Sprite Font 和 Named Sprite Fonts，直接使用原生 `TMP_SpriteAsset`；关闭时隐藏并停用这些 Sprite 设置。
+- **Text Layout**：横竖对齐、固定文本区域、自动换行、富文本和字距。关闭固定区域或自动换行时，隐藏其尺寸或宽度参数。塑形通过代码注册委托，没有塑形 Asset 或启用开关。
+- **Space & Occlusion**：空间模式和遮挡模式。World Follow 时显示世界单位比例。
+- **UI Scaling**：只在屏幕模式显示。可以跟随已有屏幕 Canvas 的实际缩放，或手动配置 Canvas Scaler 对应模式；只显示当前模式需要的参数。
+- **Animations**：一个带序号的动画列表，`0` 是默认项；每行可编辑、预览。代码通过 `animationIndex` 选择，没有单独的默认动画开关或预加载列表。
+- **Runtime Status**：只在 Play 时显示当前后端、缩放、活跃文字/字形、绘制数量和缺失资源计数。
 
-折叠分组只隐藏界面；分组内的功能开关才停用功能，并保留原先资源。Play 中修改字体列表或排版资源时会重建管理器，清掉当前飘字；需要多效果同时出现时使用逐条参数。
+折叠分组只隐藏界面；分组内的功能开关才停用功能，并保留原先资源。Play 中修改字体、字号、相机或排版资源时会重建管理器，清掉当前飘字；需要多效果同时出现时使用逐条参数。修改动画列表影响后续发射，已有飘字继续使用原动画。
+
+底层渲染无需在 Inspector 配置：默认自动选择 BRG / instancing、启用批量 Job 和紧凑字形边界，并选择对应 Shader。压力测试面板保留后端切换，方便做性能对比。
+
+### Sprite 图片字体
+
+将已有 TMP Sprite Asset 指定到 **Fonts → Default Sprite Font**。留空使用 TMP Settings 中的默认 Sprite Asset。直接输入资源中已配置 Unicode 的图片字符，或者使用 TMP 标签：
+
+```csharp
+damageText.EmitText(hitPosition, "😊 +100", Color.white);
+damageText.EmitText(hitPosition, "<sprite=0> +100", Color.white);
+damageText.EmitText(hitPosition, "<sprite name=\"coin\"> +100", Color.white);
+// 登记到 Named Sprite Fonts 的另一套资源。
+damageText.EmitText(hitPosition, "<sprite=\"CombatIcons\" name=\"fire\"> 1234", Color.white);
+```
+
+Unicode、名称、序号和 Fallback Sprite Assets 均在 TMP Sprite Asset 内设置，不再提供额外的 Text To Sprite Mappings 替换表。普通文字字体的 `fontIndex` 编号保持原有含义，Sprite 标签里的数字是对应图标的序号。
+
+### 可选的文字塑形委托
+
+不注册委托时，直接按 TMP 字形数据排版、绘制。需要额外塑形时，由你自己编写方法或调用所选插件：
+
+```csharp
+using System.Collections.Generic;
+using BurstWord.Typography;
+
+// 初始化时注册；无需制作 Asset。
+damageText.SetTextShaper(ShapeText);
+// 移除时：damageText.SetTextShaper(null);
+
+void ShapeText(in TextShapingRequest input, List<TextShapingGlyph> output)
+{
+    // 在这里调用你自己的实现或外部插件，将结果追加到 output。
+    // input.Font 是实际使用的 TMP_FontAsset；其余字段包含文字、范围、方向等。
+}
+```
+
+上面的空方法只是接口位置，必须实际填写输出后才能显示字形。输出包含字体内的 GlyphId、原文 UTF-32 Cluster、Advance 和 OffsetX/OffsetY。完整约定见 [SHAPING.md](SHAPING.md)。委托在主线程处理需要塑形的文本段，重复请求可以使用缓存；更换委托或其内部设置后重新注册，会清除当前飘字和旧缓存。
