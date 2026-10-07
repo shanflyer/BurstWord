@@ -1,6 +1,7 @@
 using BurstWord.BRG;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace BurstWord.Baseline.Editor
 {
@@ -57,7 +58,7 @@ namespace BurstWord.Baseline.Editor
             var space = serializedObject.FindProperty("spaceMode");
             if (space.enumValueIndex == (int)BrgDamageTextRenderer.SpaceMode.WorldFollow)
                 Field("worldUnitsPerLayoutUnit", "World Units Per Layout Unit");
-            else Field("referenceResolution", "Reference Resolution");
+            else DrawScreenScaling();
             if (space.enumValueIndex != (int)BrgDamageTextRenderer.SpaceMode.ScreenSnapshot)
                 EditorGUILayout.HelpBox("To follow an object, call EmitText(targetTransform, ...) or update a TextHandle's pose.", MessageType.Info);
 
@@ -149,6 +150,38 @@ namespace BurstWord.Baseline.Editor
             if (Application.isPlaying) DrawStatistics(renderer);
         }
 
+        private void DrawScreenScaling()
+        {
+            EditorGUILayout.LabelField("UI scaling", EditorStyles.boldLabel);
+            Field("scalingCanvas", "Use Existing UI Canvas", "Optional. Uses the root Canvas's actual scale. Leave empty to configure the same modes as Canvas Scaler below.");
+            var canvas = serializedObject.FindProperty("scalingCanvas").objectReferenceValue as Canvas;
+            if (canvas != null && canvas.rootCanvas.renderMode != RenderMode.WorldSpace)
+            {
+                EditorGUILayout.HelpBox("Uses the existing root Canvas's scale factor. No UI objects are created by BurstWord.", MessageType.Info);
+                return;
+            }
+            if (canvas != null) EditorGUILayout.HelpBox("Use a screen-space Canvas. A World Space Canvas does not define screen text scaling; manual settings apply instead.", MessageType.Warning);
+            Field("uiScaleMode", "UI Scale Mode");
+            switch ((CanvasScaler.ScaleMode)serializedObject.FindProperty("uiScaleMode").enumValueIndex)
+            {
+                case CanvasScaler.ScaleMode.ConstantPixelSize:
+                    Field("scaleFactor", "Scale Factor");
+                    break;
+                case CanvasScaler.ScaleMode.ScaleWithScreenSize:
+                    Field("referenceResolution", "Reference Resolution");
+                    Field("screenMatchMode", "Screen Match Mode");
+                    if (serializedObject.FindProperty("screenMatchMode").enumValueIndex == (int)CanvasScaler.ScreenMatchMode.MatchWidthOrHeight)
+                    {
+                        Field("matchWidthOrHeight", "Match", "0 = Width, 1 = Height. Uses Canvas Scaler's logarithmic interpolation.");
+                        EditorGUILayout.LabelField("", "0 = Width                  1 = Height", EditorStyles.miniLabel);
+                    }
+                    break;
+                case CanvasScaler.ScaleMode.ConstantPhysicalSize:
+                    Field("physicalUnit", "Physical Unit"); Field("fallbackScreenDPI", "Fallback Screen DPI");
+                    break;
+            }
+        }
+
         private void DrawPipeline()
         {
             var camera = serializedObject.FindProperty("worldCamera").objectReferenceValue as Camera;
@@ -169,6 +202,7 @@ namespace BurstWord.Baseline.Editor
             EditorGUILayout.LabelField("Active backend", renderer.ActiveBackend.ToString());
             EditorGUILayout.LabelField("Backend selection", renderer.BackendReason);
             EditorGUILayout.LabelField("Typography", renderer.ShaperName);
+            EditorGUILayout.LabelField("Screen scale factor", renderer.CurrentScreenScale.ToString("0.###"));
             EditorGUILayout.LabelField("Active labels / glyphs", renderer.ActiveCount + " / " + renderer.ActiveGlyphCount);
             EditorGUILayout.LabelField("Emitted / capacity drops", renderer.EmittedCount + " / " + renderer.DroppedCount);
             EditorGUILayout.LabelField("Draw commands / submitted glyphs", renderer.DrawCommandCount + " / " + renderer.SubmittedGlyphCount);

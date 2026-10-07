@@ -1,6 +1,6 @@
 {
   "name": "com.shanflyer.burstword",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "displayName": "BurstWord",
   "description": "High-throughput TMP damage text with GPU animation, BRG and automatic instancing fallback. Standard TMP glyph typography without an external shaping library with optional shaping adapters. Unity 2022.3 and newer.",
   "unity": "2022.3",

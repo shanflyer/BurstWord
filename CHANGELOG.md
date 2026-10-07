@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- Match screen-text scaling to Unity Canvas Scaler: Constant Pixel Size, Scale With Screen Size with Match Width Or Height / Expand / Shrink, and Constant Physical Size with DPI fallback.
+- Optionally follow an existing screen-space root Canvas's actual scale factor without creating UI objects; show only the applicable scaling controls in the Inspector.
+- Preserve the default 1920×1080 / Match 0.5 configuration. Apply scaling changes to live text and GPU animation without rebuilding labels; keep world-space text unchanged.
+- Share the same scaling calculation between BRG, instancing, material initialization and transparent-animation sorting. Use the full output for manual scaling and the camera viewport for pixel projection.
+
 ## 0.3.1
 
 - Add a direct-integration tutorial that requires no Samples and explicitly checks the active camera's BurstWord ordered text Renderer Feature.

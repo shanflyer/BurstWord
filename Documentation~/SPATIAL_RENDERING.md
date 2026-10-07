@@ -14,7 +14,7 @@
 
 完整场景模式是普通 TMP 三维透明文字的排序能力：透明对象作为整体比较位置，仍服从场景透明队列设置。不是逐像素透明求解；两块相交的透明平面、不同 Render Queue 的人为优先级，以及另一个自定义 Renderer Feature 在更晚阶段画出的内容，都遵守 URP 本身的渲染规则。
 
-默认和不透明遮挡模式需要 `BrgTextRendererFeature`。Editor 脚本加载及进入 Play 前，会为 Graphics Settings / 当前 Quality Settings 指定的 URP 管线自动补齐通道，并把 Feature 作为 Renderer Data 的子资源保存，同时维护 URP 的恢复映射。无需手动安装。其他尚未启用的管线可用菜单 **Tools → BurstWord → Install BRG Rendering** 安装。完整场景模式直接走普通透明通道。当前实现适配 Unity 2022.3 及后续 Unity 6 的 URP；Unity 6 提供 Render Graph 路径。不兼容 BRG 的设备自动退回底层 Instancing Draw，依然不创建每条文字对象。Built-in RP 和 HDRP 尚未实现。
+默认和不透明遮挡模式需要 `BrgTextRendererFeature`。接入时执行 **Tools → BurstWord → Install BRG Rendering**，检查相机实际使用的 Renderer Data 包含启用的 **BurstWord ordered text**。安装器会保留 Feature 的子资源映射和绘制所需的 shader 变体；管理器 Inspector 可检查当前相机及质量级别的管线配置。完整场景模式直接走普通透明通道。当前实现适配 Unity 2022.3 及后续 Unity 6 的 URP；Unity 6 提供 Render Graph 路径。不兼容 BRG 的设备自动退回底层 Instancing Draw，依然不创建每条文字对象。Built-in RP 和 HDRP 尚未实现。
 
 ## 三种空间模式
 
@@ -24,7 +24,11 @@
 | `ScreenFollow` | 持续更新目标位置，始终朝向镜头，保持屏幕字号；目标旋转和缩放不会旋转或缩放字形。 |
 | `WorldFollow` | 使用目标完整的 `localToWorldMatrix` 和传入的局部偏移、旋转、缩放。文字的朝向、尺寸、移动跟随目标，受到相机透视影响；不强制朝向镜头。保留父级非均匀缩放产生的完整矩阵。 |
 
-屏幕模式沿用 `fontSize`、`referenceResolution` 的 Canvas 风格缩放：同一分辨率下不随距离变大变小；改变显示分辨率时仍使用原来的参考分辨率适配。世界模式通过 `worldUnitsPerLayoutUnit` 把排版单位转换为 Unity 世界单位，默认 0.01。字号、该比例、寿命和空间模式在发射时捕获，修改它们影响后续发射。
+屏幕模式不随目标距离变大变小。**UI scaling** 支持 Canvas Scaler 的 Constant Pixel Size、Scale With Screen Size、Constant Physical Size，以及 Match Width Or Height / Expand / Shrink。默认保持 `referenceResolution = 1920×1080`、Match 0.5；Match 为 0 时匹配宽度、1 时匹配高度。也可指定 `scalingCanvas`，直接读取已有屏幕空间根 Canvas 的实际 `scaleFactor`。不创建 Canvas、TMP 组件或每条文字对象。
+
+手动缩放以相机完整显示输出或完整 Render Texture 尺寸为基准；分屏的相机视口用于像素到投影坐标的转换，不再把字体额外缩小。参考分辨率、匹配模式、缩放因子和已有 Canvas 的缩放变化会实时作用于存活的屏幕文字及其屏幕动画位移，不需要重新排版或发射。
+
+世界模式不受 UI 缩放设置影响，通过 `worldUnitsPerLayoutUnit` 把排版单位转换为 Unity 世界单位，默认 0.01。字号、世界单位比例、寿命和空间模式在发射时捕获，修改它们影响后续发射。
 
 `risePixels`、`horizontalDrift` 的 GPU 动画仍然保留。屏幕模式在镜头平面运动；世界模式按文字局部 X/Y 轴和世界单位比例运动，因此运动方向也跟随目标旋转与缩放。
 

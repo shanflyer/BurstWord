@@ -22,6 +22,22 @@
 
 默认不自动发射文字。角色受伤时由业务代码调用发射接口。一个管理器可处理多字体、多材质和多动画，无需每种效果创建一个管理器。
 
+### 和普通 UI 使用相同的缩放
+
+在 **Space and ordering → UI scaling** 中设置。只有 Screen Snapshot / Screen Follow 显示这些设置，World Follow 使用世界尺寸和镜头透视。
+
+最方便的方式是将游戏已有的屏幕空间 Canvas 拖入 **Use Existing UI Canvas**。飘字直接使用其根 Canvas 的实际缩放值，跟随 Canvas Scaler 的设置与运行时变化；不创建新的 Canvas 或文字 UI 对象。World Space Canvas 不适用于这个选项。
+
+没有现成 Canvas 时，留空并手动设置和 Canvas Scaler 相同的参数：
+
+| UI Scale Mode | 配置与效果 |
+| --- | --- |
+| Constant Pixel Size | Scale Factor 为 1 时，字号按屏幕像素计算。改变分辨率不改变文字的像素尺寸。 |
+| Scale With Screen Size | 设置 Reference Resolution、Screen Match Mode；Match Width Or Height 的 Match 为 0 时按宽度、1 时按高度，0.5 为宽高均衡匹配。Expand 取宽高缩放的较小值，Shrink 取较大值。 |
+| Constant Physical Size | 设置 Physical Unit 和 Fallback Screen DPI。使用设备报告的 DPI；未报告时使用备用 DPI，行为与 Canvas Scaler 一致。 |
+
+默认是 **Scale With Screen Size / 1920×1080 / Match Width Or Height / Match 0.5**。将参数设为和你的 UI 一样即可；设置实时影响已存在的屏幕飘字，无需重新发射。手动设置以相机的完整输出尺寸为缩放基准，分屏视口只影响投影；Render Texture 使用完整纹理尺寸。字号和动画的屏幕位移一起缩放，目标远近不会改变屏幕字号。
+
 ## 4. 第一条飘字
 
 创建 `DamageTextExample.cs`，挂到任意场景物体，在 Inspector 中关联管理器和目标：

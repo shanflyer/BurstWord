@@ -3,6 +3,7 @@
   "rootNamespace": "BurstWord",
   "references": [
     "Unity.TextMeshPro",
+    "UnityEngine.UI",
     "Unity.Burst",
     "Unity.RenderPipelines.Universal.Runtime",
     "Unity.RenderPipelines.Core.Runtime"

@@ -358,21 +358,13 @@ namespace BurstWord.BRG
             UpdateSpatial();
             UploadedBytesLastFrame = 0;
             UploadCallsLastFrame = 0;
-            float width = worldCamera == null ? Screen.width : worldCamera.pixelWidth;
-            float height = worldCamera == null ? Screen.height : worldCamera.pixelHeight;
-            // A batch-mode Editor has no Game view until a render request is made.
-            // Avoid collapsing all glyphs before the first valid camera viewport exists.
-            if (width <= 0) width = Mathf.Max(1, referenceResolution.x);
-            if (height <= 0) height = Mathf.Max(1, referenceResolution.y);
-            float canvasScale = Mathf.Sqrt(width / Mathf.Max(1, referenceResolution.x) * height / Mathf.Max(1, referenceResolution.y));
             using (UploadMarker.Auto())
                 foreach (var batch in glyphPages)
                 {
                     UploadedBytesLastFrame += batch.Upload();
                     UploadCallsLastFrame += batch.UploadCalls;
-                    batch.Material.SetFloat("_BurstTime", now);
-                    batch.Material.SetVector("_BurstScreen", new Vector4(width, height, canvasScale, 0));
                 }
+            UpdateScreenParameters();
             UpdateBounds();
         }
 

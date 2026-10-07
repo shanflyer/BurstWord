@@ -136,6 +136,7 @@ namespace BurstWord.BRG
             foreach (var renderer in spatialRenderers)
                 if (renderer != null && renderer.worldCamera == camera && renderer.IsInitialized)
                 {
+                    renderer.UpdateScreenParameters();
                     renderer.UpdateAnimations();
                     renderer.UpdateSpatial();
                     if (!renderer.UsingBrg && renderer.sortingMode == SortingMode.SceneTransparent)
@@ -473,15 +474,6 @@ namespace BurstWord.BRG
             material.SetShaderPassEnabled("SRPDefaultUnlit", scene);
             material.SetShaderPassEnabled("BurstWordOverlay", !scene);
         }
-        private Vector4 ScreenParameters()
-        {
-            float width=worldCamera == null ? Screen.width : worldCamera.pixelWidth;
-            float height=worldCamera == null ? Screen.height : worldCamera.pixelHeight;
-            if(width<=0) width=Mathf.Max(1,referenceResolution.x);
-            if(height<=0) height=Mathf.Max(1,referenceResolution.y);
-            float scale=Mathf.Sqrt(width/Mathf.Max(1,referenceResolution.x)*height/Mathf.Max(1,referenceResolution.y));
-            return new Vector4(width,height,scale,0);
-        }
         private void UpdateSpatial()
         {
             if (appliedPlainSdfFastPath != usePlainSdfFastPath)
@@ -548,9 +540,8 @@ namespace BurstWord.BRG
             if (sortingMode == SortingMode.SceneTransparent && animatedLabels > animatedWorldLabels)
             {
                 projection=camera.projectionMatrix*camera.worldToCameraMatrix; inverse=projection.inverse;
-                float width=Mathf.Max(1,camera.pixelWidth),height=Mathf.Max(1,camera.pixelHeight);
-                float scale=Mathf.Sqrt(width/Mathf.Max(1,referenceResolution.x)*height/Mathf.Max(1,referenceResolution.y));
-                pixelScale=new Vector2(2*scale/width,2*scale/height);
+                var screen = ScreenParameters();
+                pixelScale = new Vector2(2 * screen.z / screen.x, 2 * screen.z / screen.y);
             }
             float now = Now; int added=0;
             var liveOrders = (ulong*)liveLabelOrders.GetUnsafeReadOnlyPtr();
